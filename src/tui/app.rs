@@ -21,6 +21,7 @@ pub struct App {
     pub cursor: usize,
     pub scroll_offset: usize,
     pub viewport_height: usize,
+    pub viewport_width: usize,
     pub pending_key: Option<char>,
     pub show_filetree: bool,
     pub filetree_selected: usize,
@@ -38,6 +39,7 @@ impl App {
             cursor: 0,
             scroll_offset: 0,
             viewport_height: 0,
+            viewport_width: 0,
             pending_key: None,
             show_filetree: false,
             filetree_selected: 0,
@@ -183,6 +185,12 @@ impl App {
                 }
             }
         }
+    }
+
+    pub fn viewport_width(&self) -> usize {
+        // viewport_height is set per-frame; width isn't tracked but we can approximate.
+        // Actually store it properly:
+        self.viewport_width
     }
 
     pub fn current_file_index(&self) -> usize {

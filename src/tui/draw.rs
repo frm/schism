@@ -60,13 +60,15 @@ fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: 
 
             if Some(i) == comment_row_idx {
                 if let Some(ref input) = app.comment_input {
-                    if lines.len() < visible_rows {
-                        lines.push(comment::render_input(input, width));
+                    for cl in comment::render_input(input, width) {
+                        if lines.len() >= visible_rows { break; }
+                        lines.push(cl);
                     }
                 }
             } else if let Some(ref c) = diff_line.comment {
-                if lines.len() < visible_rows {
-                    lines.push(comment::render_saved(&c.text, width));
+                for cl in comment::render_saved(&c.text, width) {
+                    if lines.len() >= visible_rows { break; }
+                    lines.push(cl);
                 }
             }
         }

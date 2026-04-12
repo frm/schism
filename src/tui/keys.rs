@@ -11,48 +11,78 @@ pub enum Action {
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     // Comment input mode — captures all keys
-    if let Some(ref mut input) = app.comment_input {
+    if app.comment_input.is_some() {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt  = key.modifiers.contains(KeyModifiers::ALT);
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        let viewport_width = app.viewport_width();
+        let content_width = viewport_width.saturating_sub(crate::tui::comment::PREFIX_WIDTH);
+
         match key.code {
+            KeyCode::Enter if shift => {
+                app.comment_input.as_mut().unwrap().insert_char('\n');
+            }
             KeyCode::Enter => {
-                let text = input.text.clone();
-                let (fi, hi, li) = (input.file_index, input.hunk_index, input.line_index);
-                app.comment_input = None;
-                if !text.is_empty() {
-                    app.files[fi].hunks[hi].lines[li].comment =
-                        Some(crate::types::Comment { text });
+                let input = app.comment_input.take().unwrap();
+                if !input.text.is_empty() {
+                    app.files[input.file_index].hunks[input.hunk_index].lines[input.line_index]
+                        .comment = Some(crate::types::Comment { text: input.text });
                 }
-                return Action::Continue;
             }
             KeyCode::Esc => {
                 app.comment_input = None;
-                return Action::Continue;
             }
-            KeyCode::Char(c) => {
-                input.text.insert(input.cursor_pos, c);
-                input.cursor_pos += 1;
-                return Action::Continue;
+            // Ctrl+W — delete word back
+            KeyCode::Char('w') if ctrl => {
+                app.comment_input.as_mut().unwrap().delete_word_back();
+            }
+            // Ctrl+U — delete to start of line
+            KeyCode::Char('u') if ctrl => {
+                app.comment_input.as_mut().unwrap().delete_to_line_start();
+            }
+            // Ctrl+Backspace or Alt+Backspace — delete word back (macOS Cmd+Delete)
+            KeyCode::Backspace if ctrl || alt => {
+                app.comment_input.as_mut().unwrap().delete_word_back();
             }
             KeyCode::Backspace => {
-                if input.cursor_pos > 0 {
-                    input.text.remove(input.cursor_pos - 1);
-                    input.cursor_pos -= 1;
-                }
-                return Action::Continue;
+                app.comment_input.as_mut().unwrap().backspace();
+            }
+            // fn+Delete = forward delete
+            KeyCode::Delete => {
+                app.comment_input.as_mut().unwrap().delete_forward();
+            }
+            KeyCode::Home => {
+                app.comment_input.as_mut().unwrap().move_to_line_start(content_width);
+            }
+            KeyCode::End => {
+                app.comment_input.as_mut().unwrap().move_to_line_end(content_width);
+            }
+            // Alt+Left / Alt+Right — move by word
+            KeyCode::Left if alt => {
+                app.comment_input.as_mut().unwrap().move_word_left();
+            }
+            KeyCode::Right if alt => {
+                app.comment_input.as_mut().unwrap().move_word_right();
             }
             KeyCode::Left => {
-                input.cursor_pos = input.cursor_pos.saturating_sub(1);
-                return Action::Continue;
+                app.comment_input.as_mut().unwrap().move_left();
             }
             KeyCode::Right => {
-                if input.cursor_pos < input.text.len() {
-                    input.cursor_pos += 1;
-                }
-                return Action::Continue;
+                app.comment_input.as_mut().unwrap().move_right();
             }
-            _ => return Action::Continue,
+            KeyCode::Up => {
+                app.comment_input.as_mut().unwrap().move_up(content_width);
+            }
+            KeyCode::Down => {
+                app.comment_input.as_mut().unwrap().move_down(content_width);
+            }
+            KeyCode::Char(c) if !ctrl && !alt => {
+                app.comment_input.as_mut().unwrap().insert_char(c);
+            }
+            _ => {}
         }
+        return Action::Continue;
     }
-
     // Fuzzy finder mode
     if app.fuzzy_finder.is_some() {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
