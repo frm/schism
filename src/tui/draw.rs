@@ -1,4 +1,5 @@
 use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
@@ -8,20 +9,67 @@ use ratatui::{
 use crate::render::line::LineRenderer;
 use crate::render::syntax::Highlighter;
 use crate::tui::app::{App, Row};
+use crate::tui::comment;
 use crate::types::LineKind;
 
 pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     let area = frame.area();
+
+    if app.show_filetree {
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(25), Constraint::Min(0)])
+            .split(area);
+
+        crate::tui::filetree::draw(frame, app, chunks[0]);
+        draw_viewport(frame, app, highlighter, chunks[1]);
+    } else {
+        draw_viewport(frame, app, highlighter, area);
+    }
+
+    // Overlays
+    if app.fuzzy_finder.is_some() {
+        crate::tui::fuzzy::draw(frame, app, area);
+    }
+}
+
+fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: Rect) {
     let width = area.width as usize;
     let visible_rows = area.height as usize;
     let end = (app.scroll_offset + visible_rows).min(app.rows.len());
 
+    let comment_row_idx = app.comment_input.as_ref().map(|c| {
+        app.rows.iter().position(|r| matches!(r, Row::Line { file_index, hunk_index, line_index }
+            if *file_index == c.file_index && *hunk_index == c.hunk_index && *line_index == c.line_index
+        ))
+    }).flatten();
+
     let mut lines: Vec<Line> = Vec::new();
 
     for i in app.scroll_offset..end {
+        if lines.len() >= visible_rows {
+            break;
+        }
         let is_cursor = i == app.cursor;
         let line = render_row(&app.rows[i], app, highlighter, is_cursor, width);
         lines.push(line);
+
+        // Render active comment input or saved comment below this line
+        if let Row::Line { file_index, hunk_index, line_index } = &app.rows[i] {
+            let diff_line = &app.files[*file_index].hunks[*hunk_index].lines[*line_index];
+
+            if Some(i) == comment_row_idx {
+                if let Some(ref input) = app.comment_input {
+                    if lines.len() < visible_rows {
+                        lines.push(comment::render_input(input, width));
+                    }
+                }
+            } else if let Some(ref c) = diff_line.comment {
+                if lines.len() < visible_rows {
+                    lines.push(comment::render_saved(&c.text, width));
+                }
+            }
+        }
     }
 
     let paragraph = Paragraph::new(lines);
@@ -50,6 +98,7 @@ fn render_file_header<'a>(app: &App, file_index: usize, is_cursor: bool, width: 
     let file = &app.files[file_index];
     let status_word = LineRenderer::status_word(&file.status);
     let (added, removed) = LineRenderer::file_stats(file);
+    let fold = if file.collapsed { "▸" } else { "▾" };
 
     let path_display = match &file.old_path {
         Some(old) => format!("{} → {}", old, file.path),
@@ -60,7 +109,11 @@ fn render_file_header<'a>(app: &App, file_index: usize, is_cursor: bool, width: 
 
     let mut spans = Vec::new();
     spans.push(Span::styled(
-        format!(" {} ", path_display),
+        format!(" {} ", fold),
+        Style::default().fg(Color::DarkGray).bg(cursor_bg),
+    ));
+    spans.push(Span::styled(
+        format!("{} ", path_display),
         Style::default().fg(Color::White).bg(cursor_bg).add_modifier(Modifier::BOLD),
     ));
     spans.push(Span::styled(
@@ -89,7 +142,8 @@ fn render_file_header<'a>(app: &App, file_index: usize, is_cursor: bool, width: 
     ));
 
     // Fill remaining width with separator character
-    let used = 1 + path_display.len() + 1 + 2 + status_word.len() + 1 + 2
+    // " ▾ " (3) + path + " " (1) + "· " (2) + status + " " (1) + "· " (2) + +N + " " (1) + -N
+    let used = 3 + path_display.len() + 1 + 2 + status_word.len() + 1 + 2
         + format!("+{}", added).len() + 1 + format!("-{}", removed).len();
     let remaining = width.saturating_sub(used);
     if remaining > 2 {
@@ -116,10 +170,11 @@ fn render_hunk_header<'a>(
     let hunk = &app.files[file_index].hunks[hunk_index];
     let (line_num, func_context) = LineRenderer::parse_hunk_context(&hunk.header);
     let cursor_bg = if is_cursor { Color::Rgb(30, 30, 50) } else { Color::Reset };
+    let frame_char = if hunk.collapsed { " ▸ " } else { " ╭ " };
 
     let mut spans = Vec::new();
     spans.push(Span::styled(
-        " ╭ ".to_string(),
+        frame_char.to_string(),
         Style::default().fg(Color::DarkGray).bg(cursor_bg),
     ));
     spans.push(Span::styled(
@@ -237,28 +292,4 @@ fn render_diff_line<'a>(
     Line::from(spans)
 }
 
-pub fn collect_comments(app: &App) -> Option<String> {
-    let mut output = String::new();
 
-    for file in &app.files {
-        for hunk in &file.hunks {
-            for line in &hunk.lines {
-                if let Some(comment) = &line.comment {
-                    let lineno = line.new_lineno.or(line.old_lineno).unwrap_or(0);
-                    let prefix = LineRenderer::line_prefix(&line.kind);
-
-                    if !output.is_empty() {
-                        output.push('\n');
-                    }
-
-                    output.push_str(&format!("{}:{}\n", file.path, lineno));
-                    output.push_str(&format!("{}{}\n", prefix, line.content));
-                    output.push_str(&comment.text);
-                    output.push('\n');
-                }
-            }
-        }
-    }
-
-    if output.is_empty() { None } else { Some(output) }
-}

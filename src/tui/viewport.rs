@@ -10,6 +10,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::render::syntax::Highlighter;
 use crate::tui::app::App;
+use crate::tui::comment;
 use crate::tui::draw;
 use crate::tui::keys::{self, Action};
 use crate::types::DiffFile;
@@ -48,7 +49,7 @@ fn run_loop(
             match keys::handle_key(app, key) {
                 Action::Continue => {}
                 Action::Quit => return Ok(None),
-                Action::QuitWithOutput => return Ok(draw::collect_comments(app)),
+                Action::QuitWithOutput => return Ok(comment::collect(&app.files)),
             }
         }
     }

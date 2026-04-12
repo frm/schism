@@ -1,3 +1,5 @@
+use crate::tui::comment::CommentInput;
+use crate::tui::fuzzy::{FuzzyFinder, FuzzyMatch};
 use crate::types::{DiffFile, DiffLine};
 
 #[derive(Debug, Clone)]
@@ -7,6 +9,12 @@ pub enum Row {
     Line { file_index: usize, hunk_index: usize, line_index: usize },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Focus {
+    Viewport,
+    FileTree,
+}
+
 pub struct App {
     pub files: Vec<DiffFile>,
     pub rows: Vec<Row>,
@@ -14,6 +22,11 @@ pub struct App {
     pub scroll_offset: usize,
     pub viewport_height: usize,
     pub pending_key: Option<char>,
+    pub show_filetree: bool,
+    pub filetree_selected: usize,
+    pub focus: Focus,
+    pub comment_input: Option<CommentInput>,
+    pub fuzzy_finder: Option<FuzzyFinder>,
 }
 
 impl App {
@@ -26,6 +39,11 @@ impl App {
             scroll_offset: 0,
             viewport_height: 0,
             pending_key: None,
+            show_filetree: false,
+            filetree_selected: 0,
+            focus: Focus::Viewport,
+            comment_input: None,
+            fuzzy_finder: None,
         }
     }
 
@@ -66,6 +84,47 @@ impl App {
     pub fn goto_bottom(&mut self) {
         self.cursor = self.rows.len().saturating_sub(1);
         self.ensure_cursor_visible();
+    }
+
+    pub fn toggle_fold_hunk(&mut self) {
+        match &self.rows[self.cursor] {
+            Row::FileHeader { file_index } => {
+                let fi = *file_index;
+                self.files[fi].collapsed = !self.files[fi].collapsed;
+            }
+            Row::HunkHeader { file_index, hunk_index } => {
+                let (fi, hi) = (*file_index, *hunk_index);
+                self.files[fi].hunks[hi].collapsed = !self.files[fi].hunks[hi].collapsed;
+            }
+            Row::Line { file_index, hunk_index, .. } => {
+                let (fi, hi) = (*file_index, *hunk_index);
+                self.files[fi].hunks[hi].collapsed = !self.files[fi].hunks[hi].collapsed;
+            }
+        }
+        self.rebuild_rows();
+    }
+
+    pub fn toggle_fold_file(&mut self) {
+        let fi = self.current_file_index();
+        self.files[fi].collapsed = !self.files[fi].collapsed;
+        self.rebuild_rows();
+    }
+
+    pub fn toggle_fold_all_hunks_in_file(&mut self) {
+        let fi = self.current_file_index();
+        let all_collapsed = self.files[fi].hunks.iter().all(|h| h.collapsed);
+        for hunk in &mut self.files[fi].hunks {
+            hunk.collapsed = !all_collapsed;
+        }
+        self.rebuild_rows();
+    }
+
+    pub fn toggle_fold_all_files(&mut self) {
+        let all_collapsed = self.files.iter().all(|f| f.collapsed);
+        for file in &mut self.files {
+            file.collapsed = !all_collapsed;
+        }
+        self.rebuild_rows();
     }
 
     pub fn jump_next_file(&mut self) {
