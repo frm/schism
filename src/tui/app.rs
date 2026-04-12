@@ -3,6 +3,34 @@ use crate::tui::comment::CommentInput;
 use crate::tui::fuzzy::{FuzzyFinder, FuzzyMatch};
 use crate::types::{DiffFile, DiffLine};
 
+// ── tree types ────────────────────────────────────────────────────────────────
+
+/// A node in the hierarchy tree. Dir nodes own their children.
+#[derive(Debug, Clone)]
+pub struct TreeNode {
+    pub name: String,
+    /// Full path (file) or path prefix (dir)
+    pub path: String,
+    pub is_dir: bool,
+    pub expanded: bool,
+    /// App::files index for file nodes; usize::MAX for dirs
+    pub file_index: usize,
+    pub depth: usize,
+    pub children: Vec<TreeNode>,
+}
+
+/// A flat entry for cursor navigation — just references into the tree.
+#[derive(Debug, Clone)]
+pub struct FlatNode {
+    pub path: String,
+    pub is_dir: bool,
+    pub file_index: usize,
+    pub depth: usize,
+    pub expanded: bool,
+}
+
+// ── app types ─────────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone)]
 pub enum Row {
     FileHeader { file_index: usize },
@@ -25,7 +53,13 @@ pub struct App {
     pub viewport_width: usize,
     pub pending_key: Option<char>,
     pub show_filetree: bool,
+    /// Hierarchy tree with expanded state
+    pub tree_root: Vec<TreeNode>,
+    /// Flattened visible nodes for rendering/navigation
+    pub tree_flat: Vec<FlatNode>,
+    /// Cursor index into tree_flat
     pub filetree_selected: usize,
+    pub filetree_scroll: usize,
     pub focus: Focus,
     pub comment_input: Option<CommentInput>,
     pub fuzzy_finder: Option<FuzzyFinder>,
@@ -34,8 +68,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(files: Vec<DiffFile>) -> Self {
+    pub fn new(files: Vec<DiffFile>, show_filetree: bool) -> Self {
         let rows = build_rows(&files);
+        let tree_root = build_tree(&files);
+        let tree_flat = flatten_tree(&tree_root);
         Self {
             files,
             rows,
@@ -44,14 +80,28 @@ impl App {
             viewport_height: 0,
             viewport_width: 0,
             pending_key: None,
-            show_filetree: false,
+            show_filetree,
+            tree_root,
+            tree_flat,
             filetree_selected: 0,
+            filetree_scroll: 0,
             focus: Focus::Viewport,
             comment_input: None,
             fuzzy_finder: None,
             body_editor: None,
             review_body: None,
         }
+    }
+
+    /// Toggle expand/collapse on the dir at filetree_selected.
+    pub fn tree_toggle_expand(&mut self) {
+        let path = match self.tree_flat.get(self.filetree_selected) {
+            Some(n) if n.is_dir => n.path.clone(),
+            _ => return,
+        };
+        toggle_node_expanded(&mut self.tree_root, &path);
+        self.tree_flat = flatten_tree(&self.tree_root);
+        self.filetree_selected = self.filetree_selected.min(self.tree_flat.len().saturating_sub(1));
     }
 
     pub fn rebuild_rows(&mut self) {
@@ -193,8 +243,6 @@ impl App {
     }
 
     pub fn viewport_width(&self) -> usize {
-        // viewport_height is set per-frame; width isn't tracked but we can approximate.
-        // Actually store it properly:
         self.viewport_width
     }
 
@@ -207,13 +255,10 @@ impl App {
     }
 
     pub fn ensure_cursor_visible(&mut self) {
-        if self.viewport_height == 0 {
-            return;
-        }
+        if self.viewport_height == 0 { return; }
         let scrolloff: usize = 5;
         let top = self.scroll_offset + scrolloff;
         let bottom = self.scroll_offset + self.viewport_height.saturating_sub(1 + scrolloff);
-
         if self.cursor < top {
             self.scroll_offset = self.cursor.saturating_sub(scrolloff);
         } else if self.cursor > bottom {
@@ -223,9 +268,8 @@ impl App {
 
     pub fn current_line(&self) -> Option<&DiffLine> {
         match &self.rows[self.cursor] {
-            Row::Line { file_index, hunk_index, line_index } => {
-                Some(&self.files[*file_index].hunks[*hunk_index].lines[*line_index])
-            }
+            Row::Line { file_index, hunk_index, line_index } =>
+                Some(&self.files[*file_index].hunks[*hunk_index].lines[*line_index]),
             _ => None,
         }
     }
@@ -241,32 +285,128 @@ impl App {
     }
 }
 
+// ── tree building ─────────────────────────────────────────────────────────────
+
+fn build_tree(files: &[DiffFile]) -> Vec<TreeNode> {
+    let mut root: Vec<TreeNode> = Vec::new();
+
+    for (fi, file) in files.iter().enumerate() {
+        let parts: Vec<&str> = file.path.split('/').collect();
+        insert_node(&mut root, &parts, fi, 0);
+    }
+
+    sort_tree(&mut root);
+    root
+}
+
+fn insert_node(nodes: &mut Vec<TreeNode>, parts: &[&str], file_index: usize, depth: usize) {
+    let name = parts[0];
+    let is_file = parts.len() == 1;
+
+    if is_file {
+        nodes.push(TreeNode {
+            name: name.to_string(),
+            path: build_path(nodes, name, depth),
+            is_dir: false,
+            expanded: false,
+            file_index,
+            depth,
+            children: vec![],
+        });
+    } else {
+        // Find or create the dir node
+        let pos = nodes.iter().position(|n| n.is_dir && n.name == name);
+        let pos = pos.unwrap_or_else(|| {
+            let path = build_path(nodes, name, depth);
+            nodes.push(TreeNode {
+                name: name.to_string(),
+                path,
+                is_dir: true,
+                expanded: true,
+                file_index: usize::MAX,
+                depth,
+                children: vec![],
+            });
+            nodes.len() - 1
+        });
+        insert_node(&mut nodes[pos].children, &parts[1..], file_index, depth + 1);
+    }
+}
+
+/// Build the path for a new node by looking at sibling nodes (they share the prefix).
+fn build_path(siblings: &[TreeNode], name: &str, depth: usize) -> String {
+    if depth == 0 {
+        return name.to_string();
+    }
+    // All siblings share the same parent path — grab it from the first one
+    if let Some(sib) = siblings.first() {
+        let prefix: Vec<&str> = sib.path.split('/').take(depth).collect();
+        return format!("{}/{}", prefix.join("/"), name);
+    }
+    name.to_string()
+}
+
+fn sort_tree(nodes: &mut Vec<TreeNode>) {
+    nodes.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
+    for n in nodes.iter_mut() {
+        if n.is_dir { sort_tree(&mut n.children); }
+    }
+}
+
+pub fn flatten_tree(nodes: &[TreeNode]) -> Vec<FlatNode> {
+    let mut out = Vec::new();
+    flatten_walk(nodes, &mut out);
+    out
+}
+
+fn flatten_walk(nodes: &[TreeNode], out: &mut Vec<FlatNode>) {
+    for n in nodes {
+        out.push(FlatNode {
+            path: n.path.clone(),
+            is_dir: n.is_dir,
+            file_index: n.file_index,
+            depth: n.depth,
+            expanded: n.expanded,
+        });
+        if n.is_dir && n.expanded {
+            flatten_walk(&n.children, out);
+        }
+    }
+}
+
+fn toggle_node_expanded(nodes: &mut Vec<TreeNode>, path: &str) {
+    for n in nodes.iter_mut() {
+        if n.path == path {
+            n.expanded = !n.expanded;
+            return;
+        }
+        if n.is_dir {
+            toggle_node_expanded(&mut n.children, path);
+        }
+    }
+}
+
+// ── row building ──────────────────────────────────────────────────────────────
+
 fn build_rows(files: &[DiffFile]) -> Vec<Row> {
     let mut rows = Vec::new();
 
     for (fi, file) in files.iter().enumerate() {
         rows.push(Row::FileHeader { file_index: fi });
 
-        if file.collapsed {
-            continue;
-        }
+        if file.collapsed { continue; }
 
         for (hi, hunk) in file.hunks.iter().enumerate() {
-            rows.push(Row::HunkHeader {
-                file_index: fi,
-                hunk_index: hi,
-            });
+            rows.push(Row::HunkHeader { file_index: fi, hunk_index: hi });
 
-            if hunk.collapsed {
-                continue;
-            }
+            if hunk.collapsed { continue; }
 
             for (li, _) in hunk.lines.iter().enumerate() {
-                rows.push(Row::Line {
-                    file_index: fi,
-                    hunk_index: hi,
-                    line_index: li,
-                });
+                rows.push(Row::Line { file_index: fi, hunk_index: hi, line_index: li });
             }
         }
     }

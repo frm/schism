@@ -155,7 +155,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     if app.focus == Focus::FileTree && app.show_filetree {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
-                if app.filetree_selected < app.files.len().saturating_sub(1) {
+                if app.filetree_selected < app.tree_flat.len().saturating_sub(1) {
                     app.filetree_selected += 1;
                 }
                 return Action::Continue;
@@ -164,17 +164,43 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
                 app.filetree_selected = app.filetree_selected.saturating_sub(1);
                 return Action::Continue;
             }
-            KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right => {
-                app.jump_to_file(app.filetree_selected);
+            KeyCode::Enter | KeyCode::Char('o') => {
+                if let Some(node) = app.tree_flat.get(app.filetree_selected) {
+                    if node.is_dir {
+                        app.tree_toggle_expand();
+                    } else {
+                        app.jump_to_file(node.file_index);
+                        app.focus = Focus::Viewport;
+                    }
+                }
+                return Action::Continue;
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                // Collapse dir or move to parent
+                if let Some(node) = app.tree_flat.get(app.filetree_selected) {
+                    if node.is_dir && node.expanded {
+                        app.tree_toggle_expand();
+                    } else if node.depth > 0 {
+                        // Move cursor to parent dir
+                        let depth = node.depth;
+                        let path = node.path.clone();
+                        let parent: String = path.split('/').take(depth).collect::<Vec<_>>().join("/");
+                        if let Some(i) = app.tree_flat.iter().position(|n| n.is_dir && n.path == parent) {
+                            app.filetree_selected = i;
+                        }
+                    }
+                }
+                return Action::Continue;
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
                 app.focus = Focus::Viewport;
                 return Action::Continue;
             }
-            KeyCode::Char('t') => {
-                app.show_filetree = false;
+            KeyCode::Char('t') | KeyCode::Esc => {
                 app.focus = Focus::Viewport;
                 return Action::Continue;
             }
-            KeyCode::Char('q') | KeyCode::Esc => return Action::Quit,
+            KeyCode::Char('q') => return Action::Quit,
             _ => return Action::Continue,
         }
     }
@@ -272,7 +298,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         }
         KeyCode::Char('h') | KeyCode::Left if app.show_filetree => {
             app.focus = Focus::FileTree;
-            app.filetree_selected = app.current_file_index();
             Action::Continue
         }
         KeyCode::Char('z') => {
@@ -348,6 +373,8 @@ fn editor_action(key: KeyEvent) -> EditorAction {
         KeyCode::End                            => EditorAction::Edit(Edit::MoveLineEnd),
         KeyCode::Left  if alt                   => EditorAction::Edit(Edit::MoveWordLeft),
         KeyCode::Right if alt                   => EditorAction::Edit(Edit::MoveWordRight),
+        KeyCode::Char('b') if alt               => EditorAction::Edit(Edit::MoveWordLeft),
+        KeyCode::Char('f') if alt               => EditorAction::Edit(Edit::MoveWordRight),
         KeyCode::Left                           => EditorAction::Edit(Edit::MoveLeft),
         KeyCode::Right                          => EditorAction::Edit(Edit::MoveRight),
         KeyCode::Up                             => EditorAction::Edit(Edit::MoveUp),

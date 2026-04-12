@@ -23,6 +23,10 @@ struct Cli {
     /// Output review as JSON
     #[arg(long)]
     json: bool,
+
+    /// Start with the file tree open
+    #[arg(long)]
+    tree: bool,
 }
 
 fn read_piped_stdin() -> Result<String> {
@@ -76,7 +80,7 @@ fn main() -> Result<()> {
         let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
         render::pipe::render_pipe(&files, is_tty)?;
     } else {
-        let (files, review_body) = tui::viewport::run(files)?;
+        let (files, review_body) = tui::viewport::run(files, cli.tree)?;
         if cli.json {
             let review = export::json::Review {
                 body: review_body.as_deref(),

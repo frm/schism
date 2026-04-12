@@ -2,7 +2,10 @@ use std::fs::File;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event},
+    event::{
+        self, DisableBracketedPaste, EnableBracketedPaste, Event,
+        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -15,20 +18,32 @@ use crate::tui::draw;
 use crate::tui::keys::{self, Action};
 use crate::types::DiffFile;
 
-pub fn run(files: Vec<DiffFile>) -> Result<(Vec<DiffFile>, Option<String>)> {
+pub fn run(files: Vec<DiffFile>, show_tree: bool) -> Result<(Vec<DiffFile>, Option<String>)> {
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
     let backend = CrosstermBackend::new(tty);
 
     enable_raw_mode()?;
     let mut terminal = Terminal::new(backend)?;
-    execute!(terminal.backend_mut(), EnterAlternateScreen, EnableBracketedPaste)?;
+    execute!(
+        terminal.backend_mut(),
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        ),
+    )?;
 
-    let mut app = App::new(files);
+    let mut app = App::new(files, show_tree);
     let highlighter = Highlighter::new();
 
     let result = run_loop(&mut terminal, &mut app, &highlighter);
 
-    execute!(terminal.backend_mut(), DisableBracketedPaste, LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        PopKeyboardEnhancementFlags,
+        DisableBracketedPaste,
+        LeaveAlternateScreen,
+    )?;
     disable_raw_mode()?;
 
     result
