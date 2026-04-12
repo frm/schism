@@ -1,3 +1,5 @@
+mod parse;
+mod render;
 mod types;
 
 use anyhow::Result;
@@ -24,8 +26,11 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    let files = parse::parse_diff(&input);
+
     if cli.no_pager {
-        eprintln!("no-pager mode: TODO");
+        let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
+        render::pipe::render_pipe(&files, is_tty)?;
     } else {
         eprintln!("interactive mode: TODO");
     }
