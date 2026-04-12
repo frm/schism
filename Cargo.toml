@@ -1,0 +1,15 @@
+[package]
+name = "schism"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal diff reviewer with inline commenting"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }
+arboard = "3"
+clap = { version = "4", features = ["derive"] }
+nucleo-matcher = "0.3"
+anyhow = "1"
+chrono = "0.4"
