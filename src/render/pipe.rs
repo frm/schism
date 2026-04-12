@@ -5,7 +5,7 @@ use crossterm::terminal;
 
 use crate::render::line::LineRenderer;
 use crate::render::syntax::Highlighter;
-use crate::types::{DiffFile, FileStatus, Hunk, LineKind};
+use crate::types::{DiffFile, Hunk, LineKind};
 
 pub fn render_pipe(files: &[DiffFile], is_tty: bool) -> io::Result<()> {
     let stdout = io::stdout();
@@ -37,14 +37,8 @@ fn render_file_header(
     is_tty: bool,
     term_width: usize,
 ) -> io::Result<()> {
-    let status_word = match file.status {
-        FileStatus::Added => "added",
-        FileStatus::Modified => "modified",
-        FileStatus::Deleted => "deleted",
-        FileStatus::Renamed => "renamed",
-    };
-
-    let (added, removed) = file_stats(file);
+    let status_word = LineRenderer::status_word(&file.status);
+    let (added, removed) = LineRenderer::file_stats(file);
 
     let path_display = match &file.old_path {
         Some(old) => format!("{} → {}", old, file.path),
@@ -80,7 +74,7 @@ fn render_hunk(
     is_tty: bool,
     term_width: usize,
 ) -> io::Result<()> {
-    let (line_num, func_context) = parse_hunk_context(&hunk.header);
+    let (line_num, func_context) = LineRenderer::parse_hunk_context(&hunk.header);
 
     // Hunk open: ╭ L## function_context
     if !is_tty {
@@ -191,39 +185,4 @@ fn render_line(
     Ok(())
 }
 
-fn file_stats(file: &DiffFile) -> (usize, usize) {
-    let mut added = 0;
-    let mut removed = 0;
-    for hunk in &file.hunks {
-        for line in &hunk.lines {
-            match line.kind {
-                LineKind::Added => added += 1,
-                LineKind::Removed => removed += 1,
-                LineKind::Context => {}
-            }
-        }
-    }
-    (added, removed)
-}
 
-fn parse_hunk_context(header: &str) -> (u32, Option<&str>) {
-    // "@@ -old,count +new,count @@ optional function context"
-    let after_at = header.split(" @@ ").nth(1).unwrap_or("");
-    let func_context = if after_at.is_empty() {
-        // Try splitting on "@@" without trailing space
-        let alt = header.split("@@").nth(2).map(|s| s.trim());
-        alt.filter(|s| !s.is_empty())
-    } else {
-        Some(after_at.trim())
-    };
-
-    // Extract new-side start line number
-    let new_start = header
-        .split('+')
-        .nth(1)
-        .and_then(|s| s.split(|c: char| !c.is_ascii_digit()).next())
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
-
-    (new_start, func_context)
-}

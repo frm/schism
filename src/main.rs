@@ -1,6 +1,9 @@
 mod parse;
 mod render;
+mod tui;
 mod types;
+
+use std::io::Read;
 
 use anyhow::Result;
 use clap::Parser;
@@ -17,10 +20,46 @@ struct Cli {
     output: Option<std::path::PathBuf>,
 }
 
+fn read_piped_stdin() -> Result<String> {
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input)?;
+
+    // Replace stdin fd with /dev/tty so crossterm can read keyboard events.
+    //
+    // 1. Close the consumed pipe on fd 0
+    // 2. dup2 /dev/tty onto fd 0
+    // 3. Leak the File so the underlying fd stays valid
+    unsafe { libc::close(libc::STDIN_FILENO) };
+
+    let tty = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")?;
+
+    let tty_fd = std::os::unix::io::AsRawFd::as_raw_fd(&tty);
+    if tty_fd != libc::STDIN_FILENO {
+        if unsafe { libc::dup2(tty_fd, libc::STDIN_FILENO) } == -1 {
+            anyhow::bail!("dup2 failed: {}", std::io::Error::last_os_error());
+        }
+        // tty will be dropped (closing tty_fd), but fd 0 is now an independent copy
+    } else {
+        // tty got assigned fd 0 directly — don't let Drop close it
+        std::mem::forget(tty);
+    }
+
+    Ok(input)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let input = std::io::read_to_string(std::io::stdin())?;
+    let is_piped = !std::io::IsTerminal::is_terminal(&std::io::stdin());
+
+    let input = if is_piped {
+        read_piped_stdin()?
+    } else {
+        return Ok(());
+    };
 
     if input.is_empty() {
         return Ok(());
@@ -32,7 +71,9 @@ fn main() -> Result<()> {
         let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
         render::pipe::render_pipe(&files, is_tty)?;
     } else {
-        eprintln!("interactive mode: TODO");
+        if let Some(output) = tui::viewport::run(files)? {
+            print!("{}", output);
+        }
     }
 
     Ok(())
