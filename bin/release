@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -e
+# release — build an optimized release binary
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RELEASE_DIR="$PROJECT_DIR/release"
+
+echo "[schism:release] building release binary..."
+cd "$PROJECT_DIR"
+
+cargo build --release
+
+mkdir -p "$RELEASE_DIR"
+cp target/release/schism "$RELEASE_DIR/schism"
+
+echo "[schism:release] done: $RELEASE_DIR/schism"
+echo "[schism:release] test with: git diff | $RELEASE_DIR/schism --no-pager"

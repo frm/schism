@@ -1,0 +1,64 @@
+#!/usr/bin/env sh
+set -e
+# setup — bootstrap the schism dev environment
+
+#
+# globals
+#
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+#
+# aux functions
+#
+
+__setup_echo() { echo "[schism:setup] $1" >&2; }
+__setup_error() { echo "[schism:setup] ERROR: $1" >&2; exit 1; }
+
+__setup_check_rust() {
+  if ! command -v rustc >/dev/null 2>&1; then
+    __setup_error "rust is not installed. Install it first: https://rustup.rs"
+  fi
+  __setup_echo "rust found: $(rustc --version)"
+}
+
+__setup_check_cargo() {
+  if ! command -v cargo >/dev/null 2>&1; then
+    __setup_error "cargo is not installed. Install rust first: https://rustup.rs"
+  fi
+  __setup_echo "cargo found: $(cargo --version)"
+}
+
+__setup_fetch_deps() {
+  __setup_echo "fetching dependencies..."
+  (cd "$PROJECT_DIR" && cargo fetch)
+}
+
+__setup_build() {
+  __setup_echo "building debug binary..."
+  (cd "$PROJECT_DIR" && cargo build)
+}
+
+__setup_test() {
+  __setup_echo "running tests..."
+  (cd "$PROJECT_DIR" && cargo test)
+}
+
+#
+# main
+#
+
+main() {
+  __setup_echo "bootstrapping schism"
+
+  __setup_check_rust
+  __setup_check_cargo
+  __setup_fetch_deps
+  __setup_build
+  __setup_test
+
+  __setup_echo "done! test with: git diff | ./target/debug/schism --no-pager"
+}
+
+main "$@"
