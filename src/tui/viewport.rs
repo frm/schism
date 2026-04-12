@@ -15,7 +15,7 @@ use crate::tui::draw;
 use crate::tui::keys::{self, Action};
 use crate::types::DiffFile;
 
-pub fn run(files: Vec<DiffFile>) -> Result<Option<String>> {
+pub fn run(files: Vec<DiffFile>) -> Result<(Vec<DiffFile>, Option<String>)> {
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
     let backend = CrosstermBackend::new(tty);
 
@@ -32,13 +32,14 @@ pub fn run(files: Vec<DiffFile>) -> Result<Option<String>> {
     disable_raw_mode()?;
 
     result
+
 }
 
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<File>>,
     app: &mut App,
     highlighter: &Highlighter,
-) -> Result<Option<String>> {
+) -> Result<(Vec<DiffFile>, Option<String>)> {
     loop {
         terminal.draw(|frame| {
             app.viewport_height = frame.area().height as usize;
@@ -49,12 +50,18 @@ fn run_loop(
         match event::read()? {
             Event::Key(key) => match keys::handle_key(app, key) {
                 Action::Continue => {}
-                Action::Quit => return Ok(None),
-                Action::QuitWithOutput => return Ok(comment::collect(&app.files)),
+                Action::Quit => return Ok((std::mem::take(&mut app.files), None)),
+                Action::QuitWithOutput => {
+                    let body = app.review_body.take();
+                    let files = std::mem::take(&mut app.files);
+                    return Ok((files, body));
+                }
             },
             Event::Paste(text) => {
                 if let Some(ref mut input) = app.comment_input {
-                    input.insert_str(&text);
+                    input.editor.insert_str(&text);
+                } else if let Some(ref mut body) = app.body_editor {
+                    body.editor.insert_str(&text);
                 }
             }
             _ => {}

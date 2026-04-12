@@ -1,7 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::tui::app::{App, Focus, Row};
+use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
+use crate::tui::editor::TextEditor;
 
 pub enum Action {
     Continue,
@@ -10,76 +12,47 @@ pub enum Action {
 }
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
-    // Comment input mode — captures all keys
-    if app.comment_input.is_some() {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let alt  = key.modifiers.contains(KeyModifiers::ALT);
-        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-        let viewport_width = app.viewport_width();
-        let content_width = viewport_width.saturating_sub(crate::tui::comment::PREFIX_WIDTH);
-
-        match key.code {
-            KeyCode::Enter if shift => {
-                app.comment_input.as_mut().unwrap().insert_char('\n');
+    // Body editor mode — full overlay, same keys as comment input
+    if app.body_editor.is_some() {
+        let cw = crate::tui::body::content_width(app.viewport_width);
+        match editor_action(key) {
+            EditorAction::InsertNewline => {
+                app.body_editor.as_mut().unwrap().editor.insert_char('\n');
             }
-            KeyCode::Enter => {
+            EditorAction::Save => {
+                let body = app.body_editor.take().unwrap();
+                let text = body.editor.text.trim().to_string();
+                app.review_body = if text.is_empty() { None } else { Some(text) };
+            }
+            EditorAction::Cancel => {
+                app.body_editor = None;
+            }
+            EditorAction::Edit(edit) => apply_edit(&mut app.body_editor.as_mut().unwrap().editor, edit, cw),
+            EditorAction::None => {}
+        }
+        return Action::Continue;
+    }
+
+    // Comment input mode
+    if app.comment_input.is_some() {
+        let cw = app.viewport_width.saturating_sub(crate::tui::comment::PREFIX_WIDTH);
+        match editor_action(key) {
+            EditorAction::InsertNewline => {
+                app.comment_input.as_mut().unwrap().editor.insert_char('\n');
+            }
+            EditorAction::Save => {
                 let input = app.comment_input.take().unwrap();
-                if !input.text.is_empty() {
+                let text = input.editor.text.trim().to_string();
+                if !text.is_empty() {
                     app.files[input.file_index].hunks[input.hunk_index].lines[input.line_index]
-                        .comment = Some(crate::types::Comment { text: input.text });
+                        .comment = Some(crate::types::Comment { text });
                 }
             }
-            KeyCode::Esc => {
+            EditorAction::Cancel => {
                 app.comment_input = None;
             }
-            // Ctrl+W — delete word back
-            KeyCode::Char('w') if ctrl => {
-                app.comment_input.as_mut().unwrap().delete_word_back();
-            }
-            // Ctrl+U — delete to start of line
-            KeyCode::Char('u') if ctrl => {
-                app.comment_input.as_mut().unwrap().delete_to_line_start();
-            }
-            // Ctrl+Backspace or Alt+Backspace — delete word back (macOS Cmd+Delete)
-            KeyCode::Backspace if ctrl || alt => {
-                app.comment_input.as_mut().unwrap().delete_word_back();
-            }
-            KeyCode::Backspace => {
-                app.comment_input.as_mut().unwrap().backspace();
-            }
-            // fn+Delete = forward delete
-            KeyCode::Delete => {
-                app.comment_input.as_mut().unwrap().delete_forward();
-            }
-            KeyCode::Home => {
-                app.comment_input.as_mut().unwrap().move_to_line_start(content_width);
-            }
-            KeyCode::End => {
-                app.comment_input.as_mut().unwrap().move_to_line_end(content_width);
-            }
-            // Alt+Left / Alt+Right — move by word
-            KeyCode::Left if alt => {
-                app.comment_input.as_mut().unwrap().move_word_left();
-            }
-            KeyCode::Right if alt => {
-                app.comment_input.as_mut().unwrap().move_word_right();
-            }
-            KeyCode::Left => {
-                app.comment_input.as_mut().unwrap().move_left();
-            }
-            KeyCode::Right => {
-                app.comment_input.as_mut().unwrap().move_right();
-            }
-            KeyCode::Up => {
-                app.comment_input.as_mut().unwrap().move_up(content_width);
-            }
-            KeyCode::Down => {
-                app.comment_input.as_mut().unwrap().move_down(content_width);
-            }
-            KeyCode::Char(c) if !ctrl && !alt => {
-                app.comment_input.as_mut().unwrap().insert_char(c);
-            }
-            _ => {}
+            EditorAction::Edit(edit) => apply_edit(&mut app.comment_input.as_mut().unwrap().editor, edit, cw),
+            EditorAction::None => {}
         }
         return Action::Continue;
     }
@@ -245,18 +218,14 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('c') => {
             if let Row::Line { file_index, hunk_index, line_index } = &app.rows[app.cursor] {
                 let existing = app.files[*file_index].hunks[*hunk_index].lines[*line_index]
-                    .comment
-                    .as_ref()
-                    .map(|c| c.text.clone())
-                    .unwrap_or_default();
-                app.comment_input = Some(CommentInput {
-                    text: existing.clone(),
-                    cursor_pos: existing.len(),
-                    file_index: *file_index,
-                    hunk_index: *hunk_index,
-                    line_index: *line_index,
-                });
+                    .comment.as_ref().map(|c| c.text.clone()).unwrap_or_default();
+                app.comment_input = Some(CommentInput::new(*file_index, *hunk_index, *line_index, existing));
             }
+            Action::Continue
+        }
+        KeyCode::Char('b') => {
+            let existing = app.review_body.clone().unwrap_or_default();
+            app.body_editor = Some(BodyEditor::new(existing));
             Action::Continue
         }
         KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -335,5 +304,74 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
             Action::Continue
         }
         _ => Action::Continue,
+    }
+}
+
+// ── shared editor input ───────────────────────────────────────────────────────
+
+enum Edit {
+    InsertChar(char),
+    InsertStr(String),
+    Backspace,
+    DeleteForward,
+    DeleteWordBack,
+    DeleteToLineStart,
+    MoveLeft, MoveRight,
+    MoveWordLeft, MoveWordRight,
+    MoveUp, MoveDown,
+    MoveLineStart, MoveLineEnd,
+}
+
+enum EditorAction {
+    InsertNewline,
+    Save,
+    Cancel,
+    Edit(Edit),
+    None,
+}
+
+fn editor_action(key: KeyEvent) -> EditorAction {
+    let ctrl  = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt   = key.modifiers.contains(KeyModifiers::ALT);
+    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+
+    match key.code {
+        KeyCode::Enter if shift                 => EditorAction::InsertNewline,
+        KeyCode::Enter                          => EditorAction::Save,
+        KeyCode::Esc                            => EditorAction::Cancel,
+        KeyCode::Char('w') if ctrl              => EditorAction::Edit(Edit::DeleteWordBack),
+        KeyCode::Char('u') if ctrl              => EditorAction::Edit(Edit::DeleteToLineStart),
+        KeyCode::Backspace if ctrl || alt       => EditorAction::Edit(Edit::DeleteWordBack),
+        KeyCode::Backspace                      => EditorAction::Edit(Edit::Backspace),
+        KeyCode::Delete                         => EditorAction::Edit(Edit::DeleteForward),
+        KeyCode::Home                           => EditorAction::Edit(Edit::MoveLineStart),
+        KeyCode::End                            => EditorAction::Edit(Edit::MoveLineEnd),
+        KeyCode::Left  if alt                   => EditorAction::Edit(Edit::MoveWordLeft),
+        KeyCode::Right if alt                   => EditorAction::Edit(Edit::MoveWordRight),
+        KeyCode::Left                           => EditorAction::Edit(Edit::MoveLeft),
+        KeyCode::Right                          => EditorAction::Edit(Edit::MoveRight),
+        KeyCode::Up                             => EditorAction::Edit(Edit::MoveUp),
+        KeyCode::Down                           => EditorAction::Edit(Edit::MoveDown),
+        KeyCode::Char(c) if !ctrl && !alt       => EditorAction::Edit(Edit::InsertChar(c)),
+        _                                       => EditorAction::None,
+    }
+}
+
+fn apply_edit(ed: &mut TextEditor, edit: Edit, cw: usize) {
+    match edit {
+        Edit::InsertChar(c)      => ed.insert_char(c),
+        Edit::InsertStr(s)       => ed.insert_str(&s),
+        Edit::Backspace          => ed.backspace(),
+        Edit::DeleteForward      => ed.delete_forward(),
+        Edit::DeleteWordBack     => ed.delete_word_back(),
+        Edit::DeleteToLineStart  => ed.delete_to_line_start(),
+        Edit::MoveLeft           => ed.move_left(),
+        Edit::MoveRight          => ed.move_right(),
+        Edit::MoveWordLeft       => ed.move_word_left(),
+        Edit::MoveWordRight      => ed.move_word_right(),
+        Edit::MoveUp             => ed.move_up(cw),
+        Edit::MoveDown           => ed.move_down(cw),
+        Edit::MoveLineStart      => ed.move_to_line_start(cw),
+        Edit::MoveLineEnd        => ed.move_to_line_end(cw),
     }
 }

@@ -31,6 +31,9 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     if app.fuzzy_finder.is_some() {
         crate::tui::fuzzy::draw(frame, app, area);
     }
+    if let Some(ref body) = app.body_editor {
+        crate::tui::body::draw(frame, body, area);
+    }
 }
 
 fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: Rect) {

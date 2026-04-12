@@ -1,3 +1,4 @@
+use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
 use crate::tui::fuzzy::{FuzzyFinder, FuzzyMatch};
 use crate::types::{DiffFile, DiffLine};
@@ -28,6 +29,8 @@ pub struct App {
     pub focus: Focus,
     pub comment_input: Option<CommentInput>,
     pub fuzzy_finder: Option<FuzzyFinder>,
+    pub body_editor: Option<BodyEditor>,
+    pub review_body: Option<String>,
 }
 
 impl App {
@@ -46,6 +49,8 @@ impl App {
             focus: Focus::Viewport,
             comment_input: None,
             fuzzy_finder: None,
+            body_editor: None,
+            review_body: None,
         }
     }
 

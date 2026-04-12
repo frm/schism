@@ -1,6 +1,8 @@
 pub mod app;
+pub mod body;
 pub mod comment;
 pub mod draw;
+pub mod editor;
 pub mod filetree;
 pub mod fuzzy;
 pub mod keys;

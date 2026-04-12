@@ -1,3 +1,4 @@
+mod export;
 mod parse;
 mod render;
 mod tui;
@@ -18,6 +19,10 @@ struct Cli {
     /// Output file for markdown export
     #[arg(short, long)]
     output: Option<std::path::PathBuf>,
+
+    /// Output review as JSON
+    #[arg(long)]
+    json: bool,
 }
 
 fn read_piped_stdin() -> Result<String> {
@@ -71,8 +76,19 @@ fn main() -> Result<()> {
         let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
         render::pipe::render_pipe(&files, is_tty)?;
     } else {
-        if let Some(output) = tui::viewport::run(files)? {
-            print!("{}", output);
+        let (files, review_body) = tui::viewport::run(files)?;
+        if cli.json {
+            let review = export::json::Review {
+                body: review_body.as_deref(),
+                files: &files,
+            };
+            print!("{}", export::json::format_json(&review));
+        } else if let Some(body) = review_body {
+            let output = tui::comment::collect(&files, Some(&body));
+            if let Some(s) = output { print!("{}", s); }
+        } else {
+            let output = tui::comment::collect(&files, None);
+            if let Some(s) = output { print!("{}", s); }
         }
     }
 
