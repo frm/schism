@@ -1,131 +1,156 @@
 # schism
 
-A terminal diff reviewer with inline commenting, folding, and structured export. Think delta meets code review.
+A terminal diff reviewer with inline commenting, folding, file tree, and structured export.
 
 ## Why
 
-Existing diff pagers (delta, diff-so-fancy) make diffs pretty but don't let you _do_ anything with them. schism lets you review a diff, leave inline comments, and pipe those comments to an AI, a markdown file, or your clipboard — without leaving the terminal.
+Diff pagers make diffs pretty but don't let you _do_ anything with them. schism lets you review a diff, leave inline comments on lines or whole files, write a review body, and pipe everything to an AI — without leaving the terminal.
+
+## Install
+
+```bash
+cargo install --git https://github.com/frm/schism
+```
 
 ## Usage
 
 ```bash
-# Interactive review (default)
+# Interactive review
 git diff | schism
 
-# Pretty-print, no TUI (like delta)
+# Pretty-print, no TUI
 git diff | schism --no-pager
 
-# Review and pipe comments to an AI
-git diff | schism | claude
+# Output as JSON
+git diff | schism --json
 
-# Review and save to file
-git diff | schism > /dev/null  # comments go to stdout
-git diff | schism --no-pager   # just read the diff
+# Open with file tree visible
+git diff | schism --tree
 ```
 
-### Modes
+## Git config
 
-**Interactive (default):** Full TUI with syntax-highlighted viewport, file tree sidebar, inline commenting, and folding. Renders to `/dev/tty` so stdout stays free for piping.
-
-**Pretty-print (`--no-pager`):** Delta-style colored output straight to stdout. No interactivity. Works as `core.pager`:
+Use schism as your default pager so `git diff`, `git show`, and `git log -p` all open in it:
 
 ```gitconfig
 [core]
-    pager = schism --no-pager
+    pager = schism
+[interactive]
+    diffFilter = schism --no-pager
+```
+
+## Example usage with Claude
+
+schism outputs comments to stdout when you press `Enter`. Add this to your shell config to review a diff and have Claude polish your notes into a proper review:
+
+```bash
+greview() {
+  local comments
+  comments=$(git diff "$@" | schism) || return
+  [[ -z "$comments" ]] && return
+  echo "$comments" | claude "These are my rough notes from a code review. Clean them up into clear, concise review comments."
+}
+```
+
+Then:
+
+```bash
+greview          # review working changes
+greview HEAD~1   # review last commit
+greview main     # review diff against main
 ```
 
 ## Keybindings
 
 ### Navigation
 
-| Key | Action |
-|---|---|
-| `j`/`k`, `↑`/`↓` | Move cursor |
-| `J`/`K` | Jump to next/prev file |
-| `n`/`N` | Jump to next/prev hunk (or search match) |
-| `Space`, `PgDn`/`PgUp` | Page scroll |
-| `Ctrl+P` | Fuzzy file finder |
-| `/` | Search in diff |
+| Key              | Action                                   |
+| ---------------- | ---------------------------------------- |
+| `j`/`k`, `↑`/`↓` | Move cursor                              |
+| `J`/`K`          | Jump to next/prev file                   |
+| `n`/`N`          | Jump to next/prev hunk (or search match) |
+| `gg` / `G`       | Top / bottom                             |
+| `Ctrl+D`/`U`     | Half page down/up                        |
+| `Ctrl+F`/`B`     | Full page down/up                        |
+| `Ctrl+P`         | Fuzzy file finder                        |
+| `/`              | Search in diff                           |
 
 ### Folding
 
-| Key | Action |
-|---|---|
-| `z` | Toggle fold current hunk |
-| `Z` | Toggle fold current file |
-| `Tab` | Toggle fold all hunks in file |
-| `Shift+Tab` | Toggle fold all files |
+| Key           | Action                        |
+| ------------- | ----------------------------- |
+| `z` / `Space` | Toggle fold hunk              |
+| `Z`           | Toggle fold file              |
+| `Tab`         | Toggle fold all hunks in file |
+| `Shift+Tab`   | Toggle fold all files         |
 
-### Review
+### Commenting
 
-| Key | Action |
-|---|---|
-| `c` | Add/edit comment on current line |
-| `dd` | Delete comment |
-| `e` | Export comments to markdown file |
-| `y` | Copy comments to clipboard |
-| `t` | Toggle file tree sidebar |
+| Key  | Action                                          |
+| ---- | ----------------------------------------------- |
+| `c`  | Add/edit comment on current line or file header |
+| `dd` | Delete comment                                  |
+| `b`  | Edit review body                                |
+
+### File viewer
+
+| Key     | Action                               |
+| ------- | ------------------------------------ |
+| `f`     | Open full file (new version) / close |
+| `F`     | Open full file (old version)         |
+| `m`     | Toggle old/new in file viewer        |
+| `J`/`K` | Next/prev file in file viewer        |
+
+### Tools
+
+| Key     | Action                             |
+| ------- | ---------------------------------- |
+| `t`     | Toggle file tree sidebar           |
+| `h`/`l` | Switch focus between tree and diff |
+| `?`     | Help overlay                       |
 
 ### Exit
 
-| Key | Action |
-|---|---|
-| `Enter` | Exit — output comments to stdout (silent if none) |
-| `q`/`Esc` | Exit silently |
-| `?` | Help overlay |
+| Key       | Action                                            |
+| --------- | ------------------------------------------------- |
+| `Enter`   | Exit — output comments to stdout (silent if none) |
+| `q`/`Esc` | Exit silently, no output                          |
 
-## Export Formats
+## Output formats
 
 ### Stdout (on `Enter`)
 
-Pipe-friendly. Only outputs if you have comments:
+Only outputs if you have comments:
 
 ```
 src/auth.rs:42
 + if claims.expired() {
-This should handle expired tokens explicitly
+Handle expired tokens explicitly
 
-src/db/queries.rs:12
-- pub fn find_uncached(id: UserId) -> Option<User> {
-Why was this removed?
+src/auth.rs
+Whole file needs a security review
 ```
 
-### Markdown file (`e`)
+### JSON (`--json`)
 
-Writes `.schism/review-YYYY-MM-DD-HHMMSS.md`:
-
-````markdown
-# Code Review
-
-## `src/auth.rs`
-
-### L42 (added)
-```rust
-if claims.expired() {
-```
-> This should handle expired tokens explicitly
-````
-
-### Clipboard (`y`)
-
-Dense, AI-friendly:
-
-```
-src/auth.rs:42 (added) `if claims.expired() {`
-— This should handle expired tokens explicitly
-```
-
-## Install
-
-```bash
-cargo install --path .
-```
-
-## Suggested aliases
-
-```bash
-alias gd="git diff | schism --no-pager"   # quick read
-alias gr="git diff | schism"               # review mode
+```json
+{
+  "body": "Overall looks good, a few nits",
+  "comments": [
+    {
+      "path": "src/auth.rs",
+      "line": 42,
+      "change": "+",
+      "text": "Handle expired tokens"
+    },
+    {
+      "path": "src/auth.rs",
+      "line": 0,
+      "change": null,
+      "text": "Needs security review"
+    }
+  ]
+}
 ```
 
 ## Built with
@@ -133,7 +158,6 @@ alias gr="git diff | schism"               # review mode
 - [ratatui](https://github.com/ratatui/ratatui) + [crossterm](https://github.com/crossterm-rs/crossterm) — TUI
 - [syntect](https://github.com/trishume/syntect) — syntax highlighting
 - [nucleo](https://github.com/helix-editor/nucleo) — fuzzy matching
-- [arboard](https://github.com/1Password/arboard) — clipboard
 
 ## License
 
