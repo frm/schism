@@ -18,6 +18,7 @@ struct Cli {
     #[arg(long)] json: bool,
     #[arg(long)] tree: bool,
     #[arg(long)] pr: Option<String>,
+    #[arg(long)] debug: bool,
 }
 
 fn main() -> Result<()> {
@@ -48,7 +49,7 @@ fn main() -> Result<()> {
     if cli.no_pager {
         let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
         render::pipe::render_pipe(&files, is_tty)?;
-    } else if let Some((files, review_body)) = tui::viewport::run(files, cli.tree, pr_context)? {
+    } else if let Some((files, review_body)) = tui::viewport::run(files, cli.tree, pr_context, cli.debug)? {
         if cli.json {
             let review = export::json::Review { body: review_body.as_deref(), files: &files };
             print!("{}", export::json::format_json(&review));

@@ -40,7 +40,15 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
             }
             Action::Quit
         }
-        KeyCode::Enter => Action::QuitWithOutput,
+        KeyCode::Enter => {
+            if app.pr_context.is_some() && app.review_event.is_none() {
+                // Force user to choose a review action first
+                let existing = app.review_body.clone().unwrap_or_default();
+                app.body_editor = Some(BodyEditor::new(existing));
+                return Action::Continue;
+            }
+            Action::QuitWithOutput
+        }
         KeyCode::Char('j') | KeyCode::Down => {
             app.move_cursor(1);
             Action::Continue

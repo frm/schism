@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::github::pr::PrReviewContext;
+use crate::github::pr::{PrReviewContext, ReviewEvent};
 use crate::tui::commit_picker::CommitPicker;
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
@@ -43,6 +43,9 @@ pub struct App {
     pub pr_description_scroll: usize,
     pub commit_picker: Option<CommitPicker>,
     pub file_content_cache: HashMap<(usize, bool), Vec<String>>,
+    pub review_event: Option<ReviewEvent>,
+    pub debug: bool,
+    pub debug_output: Option<String>,
 }
 
 impl App {
@@ -50,6 +53,7 @@ impl App {
         let rows = build_rows(&files);
         let tree_root = build_tree(&files);
         let tree_flat = flatten_tree(&tree_root);
+        let is_pr = pr_context.is_some();
         Self {
             files,
             rows,
@@ -76,6 +80,9 @@ impl App {
             pr_description_scroll: 0,
             commit_picker: None,
             file_content_cache: HashMap::new(),
+            review_event: if is_pr { Some(ReviewEvent::Comment) } else { None },
+            debug: false,
+            debug_output: None,
         }
     }
 

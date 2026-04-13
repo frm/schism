@@ -23,6 +23,7 @@ pub fn run(
     files: Vec<DiffFile>,
     show_tree: bool,
     pr_context: Option<PrReviewContext>,
+    debug: bool,
 ) -> Result<Option<(Vec<DiffFile>, Option<String>)>> {
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
     let backend = CrosstermBackend::new(tty);
@@ -39,6 +40,7 @@ pub fn run(
     )?;
 
     let mut app = App::new(files, show_tree, pr_context);
+    app.debug = debug;
     let highlighter = Highlighter::new();
 
     let result = run_loop(&mut terminal, &mut app, &highlighter);
@@ -50,6 +52,10 @@ pub fn run(
         LeaveAlternateScreen,
     )?;
     disable_raw_mode()?;
+
+    if let Some(debug_out) = app.debug_output.take() {
+        eprintln!("{}", debug_out);
+    }
 
     result
 
@@ -81,6 +87,26 @@ fn run_loop(
                 Action::Continue => {}
                 Action::Quit => return Ok(None),
                 Action::QuitWithOutput => {
+                    // PR mode: submit review via gh
+                    if let (Some(ctx), Some(event)) = (&app.pr_context, app.review_event) {
+                        let body = app.review_body.take().unwrap_or_default();
+                        if app.debug {
+                            let payload = crate::github::pr::build_review_payload(&body, event, &app.files);
+                            let endpoint = format!(
+                                "POST /repos/{}/{}/pulls/{}/reviews",
+                                ctx.pr.owner, ctx.pr.repo, ctx.pr.number,
+                            );
+                            app.debug_output = Some(format!(
+                                "{}\n{}",
+                                endpoint,
+                                serde_json::to_string_pretty(&payload).unwrap(),
+                            ));
+                            return Ok(None);
+                        }
+                        crate::github::pr::submit_review(ctx, &body, event, &app.files)?;
+                        return Ok(None);
+                    }
+                    // Normal mode: return files + body for stdout/json output
                     let body = app.review_body.take();
                     let files = std::mem::take(&mut app.files);
                     return Ok(Some((files, body)));

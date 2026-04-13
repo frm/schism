@@ -4,7 +4,7 @@ pub mod rows;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
@@ -20,27 +20,35 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     let area = if let Some(ref ctx) = app.pr_context {
         let bar = Rect::new(full_area.x, full_area.y, full_area.width, 1);
         let content = Rect::new(full_area.x, full_area.y + 1, full_area.width, full_area.height.saturating_sub(1));
-        let text = format!(
-            " PR #{} · {} · {} ← {} · {} · {}",
-            ctx.pr.number,
-            ctx.metadata.author,
-            ctx.metadata.base_branch,
-            ctx.metadata.head_branch,
-            ctx.metadata.title,
-            ctx.metadata.url,
-        );
-        let truncated = if text.len() > bar.width as usize {
-            format!("{}…", &text[..bar.width as usize - 1])
-        } else {
-            text
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                truncated,
-                Style::default().fg(Color::Cyan),
-            ))),
-            bar,
-        );
+
+        let info = Style::default().fg(Color::Cyan);
+        let mut spans = vec![
+            Span::styled(format!(" PR #{}", ctx.pr.number), info),
+            Span::styled(" · ", info),
+            Span::styled(ctx.metadata.author.clone(), info),
+            Span::styled(" · ", info),
+            Span::styled(format!("{} ← {}", ctx.metadata.base_branch, ctx.metadata.head_branch), info),
+            Span::styled(" · ", info),
+            Span::styled(ctx.metadata.title.clone(), info),
+        ];
+
+        let used: usize = spans.iter().map(|s| s.content.len()).sum();
+
+        if let Some(event) = app.review_event {
+            let (label, bg) = match event {
+                crate::github::pr::ReviewEvent::Comment => (" comment ", Color::Rgb(40, 40, 60)),
+                crate::github::pr::ReviewEvent::Approve => (" approve ", Color::Rgb(0, 50, 0)),
+                crate::github::pr::ReviewEvent::RequestChanges => (" request changes ", Color::Rgb(60, 30, 0)),
+            };
+            let pad = (bar.width as usize).saturating_sub(used + label.len());
+            spans.push(Span::styled(" ".repeat(pad), Style::default()));
+            spans.push(Span::styled(
+                label.to_string(),
+                Style::default().fg(Color::White).bg(bg).add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        frame.render_widget(Paragraph::new(Line::from(spans)), bar);
         content
     } else {
         full_area
@@ -62,7 +70,8 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
         crate::tui::fuzzy::draw(frame, app, full_area);
     }
     if let Some(ref body) = app.body_editor {
-        crate::tui::body::draw(frame, body, full_area);
+        let action_label = app.review_event.map(|e| e.label());
+        crate::tui::body::draw(frame, body, full_area, action_label);
     }
     if let Some(ref fv) = app.file_view {
         crate::tui::fileview::draw(frame, fv, app, highlighter);

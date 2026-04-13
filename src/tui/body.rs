@@ -22,7 +22,7 @@ impl BodyEditor {
     }
 }
 
-pub fn draw(frame: &mut Frame, body: &BodyEditor, area: Rect) {
+pub fn draw(frame: &mut Frame, body: &BodyEditor, area: Rect, review_action: Option<&str>) {
     let width = (area.width * 7 / 10).max(40).min(area.width);
     let height = (area.height * 45 / 100).max(8).min(area.height);
     let x = (area.width - width) / 2;
@@ -31,10 +31,15 @@ pub fn draw(frame: &mut Frame, body: &BodyEditor, area: Rect) {
 
     frame.render_widget(Clear, popup);
 
+    let title = match review_action {
+        Some(action) => format!("──── Review body [{}]  Tab=cycle action · Shift+Enter=newline · Enter=save · Esc=cancel ", action),
+        None => "──── Review body  Shift+Enter=newline · Enter=save · Esc=cancel ".to_string(),
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(FG))
-        .title("──── Review body  Shift+Enter=newline · Enter=save · Esc=cancel ");
+        .title(title);
 
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
