@@ -14,6 +14,16 @@ pub fn format_json(review: &Review) -> String {
 
     let mut comments = Vec::new();
     for file in review.files {
+        // File-level comment (line: 0, no change field)
+        if let Some(comment) = &file.comment {
+            comments.push(format!(
+                "    {{\n      \"path\": \"{}\",\n      \"line\": 0,\n      \"change\": null,\n      \"text\": \"{}\"\n    }}",
+                escape(&file.path),
+                escape(&comment.text),
+            ));
+        }
+
+        // Line-level comments
         for hunk in &file.hunks {
             for line in &hunk.lines {
                 if let Some(comment) = &line.comment {
@@ -80,6 +90,9 @@ mod tests {
                 collapsed: false,
             }],
             collapsed: false,
+            comment: None,
+            old_sha: None,
+            new_sha: None,
         }
     }
 

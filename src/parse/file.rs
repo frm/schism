@@ -4,17 +4,17 @@ use super::hunk;
 
 pub fn parse_file(lines: &[&str], start: usize) -> (DiffFile, usize) {
     let (new_path, old_path_str) = extract_paths(lines[start]);
-    let (status, old_path, mut i) = parse_extended_headers(lines, start + 1, &new_path);
+    let (status, old_path, old_sha, new_sha, mut i) = parse_extended_headers(lines, start + 1, &new_path);
 
     if i < lines.len() && lines[i].starts_with("Binary files") {
-        let file = build_file(new_path, old_path, &old_path_str, status, Vec::new());
+        let file = build_file(new_path, old_path, &old_path_str, status, Vec::new(), old_sha, new_sha);
         return (file, i + 1);
     }
 
     i = skip_file_markers(lines, i);
 
     let (hunks, end) = hunk::parse_hunks(lines, i);
-    let file = build_file(new_path, old_path, &old_path_str, status, hunks);
+    let file = build_file(new_path, old_path, &old_path_str, status, hunks, old_sha, new_sha);
     (file, end)
 }
 
@@ -32,9 +32,11 @@ fn parse_extended_headers(
     lines: &[&str],
     start: usize,
     new_path: &str,
-) -> (FileStatus, Option<String>, usize) {
+) -> (FileStatus, Option<String>, Option<String>, Option<String>, usize) {
     let mut status = FileStatus::Modified;
     let mut old_path: Option<String> = None;
+    let mut old_sha: Option<String> = None;
+    let mut new_sha: Option<String> = None;
     let mut i = start;
 
     while i < lines.len()
@@ -50,6 +52,13 @@ fn parse_extended_headers(
         } else if let Some(from) = line.strip_prefix("rename from ") {
             status = FileStatus::Renamed;
             old_path = Some(from.to_string());
+        } else if let Some(rest) = line.strip_prefix("index ") {
+            // index <old sha>..<new sha> [mode]
+            let parts: Vec<&str> = rest.splitn(2, "..").collect();
+            if parts.len() == 2 {
+                old_sha = Some(parts[0].to_string());
+                new_sha = Some(parts[1].split_whitespace().next().unwrap_or("").to_string());
+            }
         }
         i += 1;
     }
@@ -65,7 +74,7 @@ fn parse_extended_headers(
         }
     }
 
-    (status, old_path, i)
+    (status, old_path, old_sha, new_sha, i)
 }
 
 fn skip_file_markers(lines: &[&str], mut i: usize) -> usize {
@@ -84,6 +93,8 @@ fn build_file(
     old_path_str: &str,
     status: FileStatus,
     hunks: Vec<crate::types::Hunk>,
+    old_sha: Option<String>,
+    new_sha: Option<String>,
 ) -> DiffFile {
     let resolved_old_path = old_path.or_else(|| {
         if old_path_str != new_path {
@@ -99,5 +110,8 @@ fn build_file(
         status,
         hunks,
         collapsed: false,
+        comment: None,
+        old_sha,
+        new_sha,
     }
 }

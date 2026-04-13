@@ -12,20 +12,30 @@ const BG_SAVED: Color = Color::Rgb(25, 25, 15);
 const FG: Color = Color::Yellow;
 pub const PREFIX_WIDTH: usize = 6; // " │  ✎ " / " │  ↳ " / " │    " are all 6 chars
 
+#[derive(Debug, Clone)]
+pub enum CommentTarget {
+    Line { file_index: usize, hunk_index: usize, line_index: usize },
+    File { file_index: usize },
+}
+
 pub struct CommentInput {
     pub editor: TextEditor,
-    pub file_index: usize,
-    pub hunk_index: usize,
-    pub line_index: usize,
+    pub target: CommentTarget,
 }
 
 impl CommentInput {
-    pub fn new(file_index: usize, hunk_index: usize, line_index: usize, existing: String) -> Self {
-        Self {
-            editor: TextEditor::with_text(existing),
-            file_index,
-            hunk_index,
-            line_index,
+    pub fn for_line(file_index: usize, hunk_index: usize, line_index: usize, existing: String) -> Self {
+        Self { editor: TextEditor::with_text(existing), target: CommentTarget::Line { file_index, hunk_index, line_index } }
+    }
+
+    pub fn for_file(file_index: usize, existing: String) -> Self {
+        Self { editor: TextEditor::with_text(existing), target: CommentTarget::File { file_index } }
+    }
+
+    pub fn file_index(&self) -> usize {
+        match self.target {
+            CommentTarget::Line { file_index, .. } => file_index,
+            CommentTarget::File { file_index } => file_index,
         }
     }
 }
@@ -57,6 +67,15 @@ pub fn collect(files: &[DiffFile], body: Option<&str>) -> Option<String> {
     let mut comments = String::new();
 
     for file in files {
+        // File-level comment
+        if let Some(comment) = &file.comment {
+            if !comments.is_empty() { comments.push('\n'); }
+            comments.push_str(&format!("{}\n", file.path));
+            comments.push_str(&comment.text);
+            comments.push('\n');
+        }
+
+        // Line-level comments
         for hunk in &file.hunks {
             for line in &hunk.lines {
                 if let Some(comment) = &line.comment {

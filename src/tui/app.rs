@@ -1,5 +1,6 @@
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
+use crate::tui::fileview::FileView;
 use crate::tui::fuzzy::{FuzzyFinder, FuzzyMatch};
 use crate::types::{DiffFile, DiffLine};
 
@@ -65,6 +66,7 @@ pub struct App {
     pub fuzzy_finder: Option<FuzzyFinder>,
     pub body_editor: Option<BodyEditor>,
     pub review_body: Option<String>,
+    pub file_view: Option<FileView>,
 }
 
 impl App {
@@ -90,6 +92,7 @@ impl App {
             fuzzy_finder: None,
             body_editor: None,
             review_body: None,
+            file_view: None,
         }
     }
 
@@ -144,27 +147,33 @@ impl App {
     }
 
     pub fn toggle_fold_hunk(&mut self) {
-        match &self.rows[self.cursor] {
+        // Capture the header we want to land on after rebuild
+        let target = match &self.rows[self.cursor] {
             Row::FileHeader { file_index } => {
                 let fi = *file_index;
                 self.files[fi].collapsed = !self.files[fi].collapsed;
+                Row::FileHeader { file_index: fi }
             }
             Row::HunkHeader { file_index, hunk_index } => {
                 let (fi, hi) = (*file_index, *hunk_index);
                 self.files[fi].hunks[hi].collapsed = !self.files[fi].hunks[hi].collapsed;
+                Row::HunkHeader { file_index: fi, hunk_index: hi }
             }
             Row::Line { file_index, hunk_index, .. } => {
                 let (fi, hi) = (*file_index, *hunk_index);
                 self.files[fi].hunks[hi].collapsed = !self.files[fi].hunks[hi].collapsed;
+                Row::HunkHeader { file_index: fi, hunk_index: hi }
             }
-        }
+        };
         self.rebuild_rows();
+        self.snap_cursor_to_header(target);
     }
 
     pub fn toggle_fold_file(&mut self) {
         let fi = self.current_file_index();
         self.files[fi].collapsed = !self.files[fi].collapsed;
         self.rebuild_rows();
+        self.snap_cursor_to_header(Row::FileHeader { file_index: fi });
     }
 
     pub fn toggle_fold_all_hunks_in_file(&mut self) {
@@ -174,6 +183,7 @@ impl App {
             hunk.collapsed = !all_collapsed;
         }
         self.rebuild_rows();
+        self.snap_cursor_to_header(Row::FileHeader { file_index: fi });
     }
 
     pub fn toggle_fold_all_files(&mut self) {
@@ -182,6 +192,26 @@ impl App {
             file.collapsed = !all_collapsed;
         }
         self.rebuild_rows();
+        // Snap to the file we were on
+        let fi = match self.rows.get(self.cursor) {
+            Some(Row::FileHeader { file_index }) => *file_index,
+            _ => 0,
+        };
+        self.snap_cursor_to_header(Row::FileHeader { file_index: fi });
+    }
+
+    /// After a fold rebuild, move cursor to the given header row and ensure it's visible.
+    fn snap_cursor_to_header(&mut self, target: Row) {
+        let pos = self.rows.iter().position(|r| match (&target, r) {
+            (Row::FileHeader { file_index: a }, Row::FileHeader { file_index: b }) => a == b,
+            (Row::HunkHeader { file_index: fa, hunk_index: ha },
+             Row::HunkHeader { file_index: fb, hunk_index: hb }) => fa == fb && ha == hb,
+            _ => false,
+        });
+        if let Some(i) = pos {
+            self.cursor = i;
+            self.ensure_cursor_visible();
+        }
     }
 
     pub fn jump_next_file(&mut self) {

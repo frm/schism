@@ -6,6 +6,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::render::line::LineRenderer;
 use crate::tui::app::App;
 use crate::types::FileStatus;
 
@@ -57,13 +58,16 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             f.hunks.iter().any(|h| h.lines.iter().any(|l| l.comment.is_some()))
         };
 
-        let status_char = if !node.is_dir && node.file_index < app.files.len() {
-            match app.files[node.file_index].status {
+        let file_meta = if !node.is_dir && node.file_index < app.files.len() {
+            let f = &app.files[node.file_index];
+            let status_char = match f.status {
                 FileStatus::Added    => Some(("A", Color::Green)),
                 FileStatus::Deleted  => Some(("D", Color::Red)),
                 FileStatus::Renamed  => Some(("R", Color::Cyan)),
-                FileStatus::Modified => None,
-            }
+                FileStatus::Modified => Some(("M", Color::Rgb(180, 140, 60))),
+            };
+            let (added, removed) = LineRenderer::file_stats(f);
+            Some((status_char, added, removed))
         } else {
             None
         };
@@ -92,9 +96,19 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         };
         spans.push(Span::styled(node.path.split('/').last().unwrap_or(&node.path).to_string(), name_style));
 
-        if let Some((sc, sc_color)) = status_char {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(sc.to_string(), Style::default().fg(sc_color)));
+        if let Some((status_char, added, removed)) = file_meta {
+            if let Some((sc, sc_color)) = status_char {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(sc.to_string(), Style::default().fg(sc_color)));
+            }
+            spans.push(Span::styled(
+                format!(" +{}", added),
+                Style::default().fg(Color::Green),
+            ));
+            spans.push(Span::styled(
+                format!(" -{}", removed),
+                Style::default().fg(Color::Red),
+            ));
         }
 
         if has_comments {

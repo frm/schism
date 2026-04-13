@@ -4,6 +4,7 @@ use crate::tui::app::{App, Focus, Row};
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
 use crate::tui::editor::TextEditor;
+use crate::tui::fileview::FileView;
 
 pub enum Action {
     Continue,
@@ -12,6 +13,51 @@ pub enum Action {
 }
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
+    // File view overlay
+    if app.file_view.is_some() {
+        let vh = app.viewport_height;
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down  => { app.file_view.as_mut().unwrap().scroll_down(1, vh); }
+            KeyCode::Char('k') | KeyCode::Up    => { app.file_view.as_mut().unwrap().scroll_up(1); }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let h = vh / 2;
+                app.file_view.as_mut().unwrap().scroll_down(h, vh);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let h = vh / 2;
+                app.file_view.as_mut().unwrap().scroll_up(h);
+            }
+            KeyCode::Char('G') => { app.file_view.as_mut().unwrap().goto_bottom(vh); }
+            KeyCode::Char('g') if app.pending_key == Some('g') => {
+                app.pending_key = None;
+                app.file_view.as_mut().unwrap().goto_top();
+            }
+            KeyCode::Char('g') => { app.pending_key = Some('g'); }
+            KeyCode::Char('J') => {
+                let next = (app.file_view.as_ref().unwrap().file_index + 1)
+                    .min(app.files.len().saturating_sub(1));
+                app.file_view.as_mut().unwrap().set_file(next, &app.files);
+            }
+            KeyCode::Char('K') => {
+                let prev = app.file_view.as_ref().unwrap().file_index.saturating_sub(1);
+                app.file_view.as_mut().unwrap().set_file(prev, &app.files);
+            }
+            // m = toggle old/new version
+            KeyCode::Char('m') => { app.file_view.as_mut().unwrap().toggle_version(&app.files); }
+            // f/Esc/q = back to diff, syncing cursor to the viewed file
+            KeyCode::Char('f') | KeyCode::Esc | KeyCode::Char('q') => {
+                let fi = app.file_view.as_ref().unwrap().file_index;
+                app.file_view = None;
+                app.jump_to_file(fi);
+                // Scroll so the file header sits at the top, clamped to bottom
+                let max_scroll = app.rows.len().saturating_sub(app.viewport_height);
+                app.scroll_offset = app.cursor.saturating_sub(5).min(max_scroll);
+            }
+            _ => {}
+        }
+        return Action::Continue;
+    }
+
     // Body editor mode — full overlay, same keys as comment input
     if app.body_editor.is_some() {
         let cw = crate::tui::body::content_width(app.viewport_width);
@@ -44,8 +90,15 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
                 let input = app.comment_input.take().unwrap();
                 let text = input.editor.text.trim().to_string();
                 if !text.is_empty() {
-                    app.files[input.file_index].hunks[input.hunk_index].lines[input.line_index]
-                        .comment = Some(crate::types::Comment { text });
+                    match input.target {
+                        crate::tui::comment::CommentTarget::Line { file_index, hunk_index, line_index } => {
+                            app.files[file_index].hunks[hunk_index].lines[line_index]
+                                .comment = Some(crate::types::Comment { text });
+                        }
+                        crate::tui::comment::CommentTarget::File { file_index } => {
+                            app.files[file_index].comment = Some(crate::types::Comment { text });
+                        }
+                    }
                 }
             }
             EditorAction::Cancel => {
@@ -242,10 +295,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
             Action::Continue
         }
         KeyCode::Char('c') => {
-            if let Row::Line { file_index, hunk_index, line_index } = &app.rows[app.cursor] {
-                let existing = app.files[*file_index].hunks[*hunk_index].lines[*line_index]
-                    .comment.as_ref().map(|c| c.text.clone()).unwrap_or_default();
-                app.comment_input = Some(CommentInput::new(*file_index, *hunk_index, *line_index, existing));
+            match &app.rows[app.cursor] {
+                Row::Line { file_index, hunk_index, line_index } => {
+                    let existing = app.files[*file_index].hunks[*hunk_index].lines[*line_index]
+                        .comment.as_ref().map(|c| c.text.clone()).unwrap_or_default();
+                    app.comment_input = Some(CommentInput::for_line(*file_index, *hunk_index, *line_index, existing));
+                }
+                Row::FileHeader { file_index } => {
+                    let existing = app.files[*file_index].comment.as_ref()
+                        .map(|c| c.text.clone()).unwrap_or_default();
+                    app.comment_input = Some(CommentInput::for_file(*file_index, existing));
+                }
+                _ => {}
             }
             Action::Continue
         }
@@ -254,14 +315,32 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
             app.body_editor = Some(BodyEditor::new(existing));
             Action::Continue
         }
+        KeyCode::Char('f') => {
+            let fi = app.current_file_index();
+            app.file_view = Some(FileView::open(fi, true, &app.files));
+            Action::Continue
+        }
+        KeyCode::Char('F') => {
+            let fi = app.current_file_index();
+            app.file_view = Some(FileView::open(fi, false, &app.files));
+            Action::Continue
+        }
         KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.half_page_down();
             Action::Continue
         }
         KeyCode::Char('d') if app.pending_key == Some('d') => {
             app.pending_key = None;
-            if let Some(line) = app.current_line_mut() {
-                line.comment = None;
+            match &app.rows[app.cursor] {
+                Row::FileHeader { file_index } => {
+                    let fi = *file_index;
+                    app.files[fi].comment = None;
+                }
+                _ => {
+                    if let Some(line) = app.current_line_mut() {
+                        line.comment = None;
+                    }
+                }
             }
             Action::Continue
         }
@@ -320,7 +399,11 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
             crate::tui::fuzzy::open(app);
             Action::Continue
         }
-        KeyCode::Char(' ') | KeyCode::PageDown => {
+        KeyCode::Char(' ') => {
+            app.toggle_fold_hunk();
+            Action::Continue
+        }
+        KeyCode::PageDown => {
             app.page_down();
             Action::Continue
         }

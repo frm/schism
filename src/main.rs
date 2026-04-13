@@ -80,19 +80,17 @@ fn main() -> Result<()> {
         let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
         render::pipe::render_pipe(&files, is_tty)?;
     } else {
-        let (files, review_body) = tui::viewport::run(files, cli.tree)?;
-        if cli.json {
-            let review = export::json::Review {
-                body: review_body.as_deref(),
-                files: &files,
-            };
-            print!("{}", export::json::format_json(&review));
-        } else if let Some(body) = review_body {
-            let output = tui::comment::collect(&files, Some(&body));
-            if let Some(s) = output { print!("{}", s); }
-        } else {
-            let output = tui::comment::collect(&files, None);
-            if let Some(s) = output { print!("{}", s); }
+        if let Some((files, review_body)) = tui::viewport::run(files, cli.tree)? {
+            if cli.json {
+                let review = export::json::Review {
+                    body: review_body.as_deref(),
+                    files: &files,
+                };
+                print!("{}", export::json::format_json(&review));
+            } else {
+                let output = tui::comment::collect(&files, review_body.as_deref());
+                if let Some(s) = output { print!("{}", s); }
+            }
         }
     }
 

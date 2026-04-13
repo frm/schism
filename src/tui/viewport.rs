@@ -18,7 +18,8 @@ use crate::tui::draw;
 use crate::tui::keys::{self, Action};
 use crate::types::DiffFile;
 
-pub fn run(files: Vec<DiffFile>, show_tree: bool) -> Result<(Vec<DiffFile>, Option<String>)> {
+/// Returns `None` on silent quit (q/Esc), `Some((files, body))` on Enter.
+pub fn run(files: Vec<DiffFile>, show_tree: bool) -> Result<Option<(Vec<DiffFile>, Option<String>)>> {
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
     let backend = CrosstermBackend::new(tty);
 
@@ -54,7 +55,7 @@ fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<File>>,
     app: &mut App,
     highlighter: &Highlighter,
-) -> Result<(Vec<DiffFile>, Option<String>)> {
+) -> Result<Option<(Vec<DiffFile>, Option<String>)>> {
     loop {
         terminal.draw(|frame| {
             app.viewport_height = frame.area().height as usize;
@@ -65,11 +66,11 @@ fn run_loop(
         match event::read()? {
             Event::Key(key) => match keys::handle_key(app, key) {
                 Action::Continue => {}
-                Action::Quit => return Ok((std::mem::take(&mut app.files), None)),
+                Action::Quit => return Ok(None),
                 Action::QuitWithOutput => {
                     let body = app.review_body.take();
                     let files = std::mem::take(&mut app.files);
-                    return Ok((files, body));
+                    return Ok(Some((files, body)));
                 }
             },
             Event::Paste(text) => {

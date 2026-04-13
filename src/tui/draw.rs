@@ -34,6 +34,9 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     if let Some(ref body) = app.body_editor {
         crate::tui::body::draw(frame, body, area);
     }
+    if let Some(ref fv) = app.file_view {
+        crate::tui::fileview::draw(frame, fv, app, highlighter);
+    }
 }
 
 fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: Rect) {
@@ -41,11 +44,17 @@ fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: 
     let visible_rows = area.height as usize;
     let end = (app.scroll_offset + visible_rows).min(app.rows.len());
 
-    let comment_row_idx = app.comment_input.as_ref().map(|c| {
-        app.rows.iter().position(|r| matches!(r, Row::Line { file_index, hunk_index, line_index }
-            if *file_index == c.file_index && *hunk_index == c.hunk_index && *line_index == c.line_index
-        ))
-    }).flatten();
+    let comment_row_idx = app.comment_input.as_ref().and_then(|c| {
+        use crate::tui::comment::CommentTarget;
+        app.rows.iter().position(|r| match (&c.target, r) {
+            (CommentTarget::Line { file_index: fi, hunk_index: hi, line_index: li },
+             Row::Line { file_index, hunk_index, line_index }) =>
+                fi == file_index && hi == hunk_index && li == line_index,
+            (CommentTarget::File { file_index: fi }, Row::FileHeader { file_index }) =>
+                fi == file_index,
+            _ => false,
+        })
+    });
 
     let mut lines: Vec<Line> = Vec::new();
 
@@ -57,23 +66,38 @@ fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: 
         let line = render_row(&app.rows[i], app, highlighter, is_cursor, width);
         lines.push(line);
 
-        // Render active comment input or saved comment below this line
-        if let Row::Line { file_index, hunk_index, line_index } = &app.rows[i] {
-            let diff_line = &app.files[*file_index].hunks[*hunk_index].lines[*line_index];
-
-            if Some(i) == comment_row_idx {
-                if let Some(ref input) = app.comment_input {
+        // Render active comment input or saved comment below this row
+        let active_input = app.comment_input.as_ref().filter(|_| Some(i) == comment_row_idx);
+        match &app.rows[i] {
+            Row::FileHeader { file_index } => {
+                let fi = *file_index;
+                if let Some(ref input) = active_input {
                     for cl in comment::render_input(input, width) {
                         if lines.len() >= visible_rows { break; }
                         lines.push(cl);
                     }
-                }
-            } else if let Some(ref c) = diff_line.comment {
-                for cl in comment::render_saved(&c.text, width) {
-                    if lines.len() >= visible_rows { break; }
-                    lines.push(cl);
+                } else if let Some(ref c) = app.files[fi].comment {
+                    for cl in comment::render_saved(&c.text, width) {
+                        if lines.len() >= visible_rows { break; }
+                        lines.push(cl);
+                    }
                 }
             }
+            Row::Line { file_index, hunk_index, line_index } => {
+                let diff_line = &app.files[*file_index].hunks[*hunk_index].lines[*line_index];
+                if let Some(ref input) = active_input {
+                    for cl in comment::render_input(input, width) {
+                        if lines.len() >= visible_rows { break; }
+                        lines.push(cl);
+                    }
+                } else if let Some(ref c) = diff_line.comment {
+                    for cl in comment::render_saved(&c.text, width) {
+                        if lines.len() >= visible_rows { break; }
+                        lines.push(cl);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 

@@ -4,6 +4,7 @@ pub mod comment;
 pub mod draw;
 pub mod editor;
 pub mod filetree;
+pub mod fileview;
 pub mod fuzzy;
 pub mod keys;
 pub mod viewport;
