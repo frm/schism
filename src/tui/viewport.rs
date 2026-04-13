@@ -67,6 +67,15 @@ fn run_loop(
             draw::draw(frame, app, highlighter);
         })?;
 
+        // Resolve pending file view fetches after rendering the loading state
+        if app.file_view.as_ref().map(|fv| fv.pending_fetch).unwrap_or(false) {
+            let pr = app.pr_context.as_ref();
+            let files = &app.files;
+            let cache = &mut app.file_content_cache;
+            app.file_view.as_mut().unwrap().resolve_pending(files, pr, cache);
+            continue;
+        }
+
         match event::read()? {
             Event::Key(key) => match keys::handle_key(app, key) {
                 Action::Continue => {}

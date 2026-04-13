@@ -118,14 +118,12 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         }
         KeyCode::Char('f') => {
             let fi = app.current_file_index();
-            let pr = app.pr_context.as_ref();
-            app.file_view = Some(FileView::open(fi, true, &app.files, pr));
+            app.file_view = Some(FileView::open(fi, true));
             Action::Continue
         }
         KeyCode::Char('F') => {
             let fi = app.current_file_index();
-            let pr = app.pr_context.as_ref();
-            app.file_view = Some(FileView::open(fi, false, &app.files, pr));
+            app.file_view = Some(FileView::open(fi, false));
             Action::Continue
         }
         KeyCode::Char('d') if app.pending_key == Some('d') => {

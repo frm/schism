@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::github::pr::PrReviewContext;
 use crate::tui::commit_picker::CommitPicker;
 use crate::tui::body::BodyEditor;
@@ -40,6 +42,7 @@ pub struct App {
     pub show_pr_description: bool,
     pub pr_description_scroll: usize,
     pub commit_picker: Option<CommitPicker>,
+    pub file_content_cache: HashMap<(usize, bool), Vec<String>>,
 }
 
 impl App {
@@ -72,6 +75,7 @@ impl App {
             show_pr_description: false,
             pr_description_scroll: 0,
             commit_picker: None,
+            file_content_cache: HashMap::new(),
         }
     }
 

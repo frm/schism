@@ -71,16 +71,20 @@ pub fn draw(frame: &mut Frame, fv: &FileView, app: &App, highlighter: &Highlight
     // ── content ───────────────────────────────────────────────────────────────
     let mut lines = vec![Line::from(header_spans)];
 
-    match &fv.content {
-        None => {
+    match (&fv.content, fv.pending_fetch) {
+        (_, true) => {
+            let msg = format!(" Fetching {}...", file.path);
+            lines.push(Line::from(Span::styled(msg, Style::default().fg(Color::DarkGray))));
+        }
+        (None, false) => {
             let msg = if fv.showing_new {
                 " (could not read file)"
             } else {
                 " (old version unavailable — no git SHA in diff)"
             };
-            lines.push(Line::from(Span::styled(msg, Style::default().fg(Color::DarkGray))));
+            lines.push(Line::from(Span::styled(msg.to_string(), Style::default().fg(Color::DarkGray))));
         }
-        Some(content) => {
+        (Some(content), false) => {
             let lineno_width = content.len().to_string().len().max(3);
             let start = fv.scroll.min(content.len());
             let end = (start + content_height).min(content.len());
