@@ -46,6 +46,7 @@ pub struct App {
     pub review_event: Option<ReviewEvent>,
     pub debug: bool,
     pub debug_output: Option<String>,
+    pub confirm_submit: bool,
 }
 
 impl App {
@@ -83,6 +84,7 @@ impl App {
             review_event: if is_pr { Some(ReviewEvent::Comment) } else { None },
             debug: false,
             debug_output: None,
+            confirm_submit: false,
         }
     }
 

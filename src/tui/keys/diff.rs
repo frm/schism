@@ -41,10 +41,13 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
             Action::Quit
         }
         KeyCode::Enter => {
-            if app.pr_context.is_some() && app.review_event.is_none() {
-                // Force user to choose a review action first
-                let existing = app.review_body.clone().unwrap_or_default();
-                app.body_editor = Some(BodyEditor::new(existing));
+            if app.pr_context.is_some() {
+                if app.review_event.is_none() {
+                    let existing = app.review_body.clone().unwrap_or_default();
+                    app.body_editor = Some(BodyEditor::new(existing));
+                    return Action::Continue;
+                }
+                app.confirm_submit = true;
                 return Action::Continue;
             }
             Action::QuitWithOutput

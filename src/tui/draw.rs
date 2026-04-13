@@ -82,8 +82,11 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     if app.show_pr_description {
         crate::tui::pr_description::draw(frame, app, full_area);
     }
+    if app.confirm_submit {
+        crate::tui::confirm::draw(frame, app, full_area);
+    }
     if app.show_help {
-        crate::tui::help::draw(frame, full_area);
+        crate::tui::help::draw(frame, app, full_area);
     }
 }
 

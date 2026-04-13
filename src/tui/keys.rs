@@ -23,6 +23,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         app.show_help = false;
         return Action::Continue;
     }
+    if app.confirm_submit {
+        match key.code {
+            crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char('y') => {
+                app.confirm_submit = false;
+                return Action::QuitWithOutput;
+            }
+            _ => {
+                app.confirm_submit = false;
+                return Action::Continue;
+            }
+        }
+    }
     if app.show_pr_description {
         return pr_description::handle(app, key);
     }

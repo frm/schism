@@ -46,7 +46,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Paragraph::new(visible).block(block), popup);
 }
 
-fn render_markdown(text: &str, content_width: usize) -> Vec<Line<'static>> {
+pub fn render_markdown(text: &str, content_width: usize) -> Vec<Line<'static>> {
     if text.trim().is_empty() {
         return vec![Line::from(Span::styled(
             " (no description)".to_string(),

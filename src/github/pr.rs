@@ -251,6 +251,7 @@ pub struct ReviewCommentPayload {
     pub line: u32,
     pub side: &'static str,
     pub body: String,
+    pub content: String,
 }
 
 pub fn collect_review_comments(files: &[crate::types::DiffFile]) -> Vec<ReviewCommentPayload> {
@@ -271,6 +272,7 @@ pub fn collect_review_comments(files: &[crate::types::DiffFile]) -> Vec<ReviewCo
                 comments.push(ReviewCommentPayload {
                     path: file.path.clone(), line: line_no, side,
                     body: file_comment.text.clone(),
+                    content: line.content.clone(),
                 });
             }
         }
@@ -287,6 +289,7 @@ pub fn collect_review_comments(files: &[crate::types::DiffFile]) -> Vec<ReviewCo
                     comments.push(ReviewCommentPayload {
                         path: file.path.clone(), line: line_no, side,
                         body: comment.text.clone(),
+                        content: line.content.clone(),
                     });
                 }
             }

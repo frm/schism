@@ -6,6 +6,8 @@ use ratatui::{
     Frame,
 };
 
+use crate::tui::app::App;
+
 const KEYS: &[(&str, &str)] = &[
     ("Navigation",       ""),
     ("j / k",            "Move cursor"),
@@ -43,20 +45,37 @@ const KEYS: &[(&str, &str)] = &[
     ("q / Esc",          "Quit silently"),
 ];
 
-pub fn draw(frame: &mut Frame, area: Rect) {
-    let width  = 52u16.min(area.width.saturating_sub(4));
-    let height = (KEYS.len() as u16 + 2).min(area.height.saturating_sub(2));
+const PR_KEYS: &[(&str, &str)] = &[
+    ("",                 ""),
+    ("PR mode",          ""),
+    ("D",                "Show PR description"),
+    ("C",                "Browse commits"),
+    ("Tab (in body)",    "Cycle: comment/approve/request changes"),
+    ("Enter",            "Submit review"),
+];
+
+pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
+    let is_pr = app.pr_context.is_some();
+    let total = KEYS.len() + if is_pr { PR_KEYS.len() } else { 0 };
+
+    let width  = 68u16.min(area.width.saturating_sub(4));
+    let height = (total as u16 + 2).min(area.height.saturating_sub(2));
     let x = (area.width.saturating_sub(width)) / 2;
     let y = (area.height.saturating_sub(height)) / 2;
     let popup = Rect::new(x, y, width, height);
 
     frame.render_widget(Clear, popup);
 
-    let lines: Vec<Line> = KEYS.iter().map(|(key, desc)| {
+    let all_keys: Vec<(&str, &str)> = if is_pr {
+        KEYS.iter().chain(PR_KEYS.iter()).copied().collect()
+    } else {
+        KEYS.to_vec()
+    };
+
+    let lines: Vec<Line> = all_keys.iter().map(|(key, desc)| {
         if desc.is_empty() && key.is_empty() {
             Line::from("")
         } else if desc.is_empty() {
-            // Section header
             Line::from(Span::styled(
                 format!(" {}", key),
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
