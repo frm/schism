@@ -9,6 +9,7 @@ pub mod fuzzy;
 pub mod help;
 pub mod keys;
 pub mod nav;
+pub mod pr_description;
 pub mod rows;
 pub mod search;
 pub mod tree;

@@ -36,6 +36,8 @@ pub struct App {
     pub search: Option<SearchState>,
     pub show_help: bool,
     pub pr_context: Option<PrReviewContext>,
+    pub show_pr_description: bool,
+    pub pr_description_scroll: usize,
 }
 
 impl App {
@@ -65,6 +67,8 @@ impl App {
             search: None,
             show_help: false,
             pr_context,
+            show_pr_description: false,
+            pr_description_scroll: 0,
         }
     }
 

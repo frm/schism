@@ -7,11 +7,13 @@ description = "Terminal diff reviewer with inline commenting"
 [dependencies]
 ratatui = "0.30"
 crossterm = { version = "0.29", features = ["use-dev-tty"] }
-syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }
+syntect = { version = "5", default-features = false, features = ["default-themes", "regex-onig"] }
+two-face = "0.4"
 arboard = "3"
 clap = { version = "4", features = ["derive"] }
 nucleo-matcher = "0.3"
 anyhow = "1"
 serde_json = "1"
+pulldown-cmark = "0.12"
 libc = "0.2"
 chrono = "0.4"

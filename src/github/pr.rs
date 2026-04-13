@@ -71,6 +71,7 @@ pub struct PrMetadata {
     pub title: String,
     pub url: String,
     pub author: String,
+    pub body: String,
     pub head_branch: String,
     pub base_branch: String,
     pub head_ref_oid: String,
@@ -98,7 +99,7 @@ pub fn build_view_args(pr: &PrRef) -> Vec<String> {
         "pr".into(), "view".into(),
         pr.number.to_string(),
         "--repo".into(), pr.repo_slug(),
-        "--json".into(), "headRefOid,baseRefOid,headRefName,baseRefName,title,url,author".into(),
+        "--json".into(), "headRefOid,baseRefOid,headRefName,baseRefName,title,url,author,body".into(),
     ]
 }
 
@@ -115,6 +116,8 @@ pub fn check_gh_installed() -> Result<()> {
 fn run_gh(args: &[String]) -> Result<String> {
     let output = Command::new("gh")
         .args(args)
+        .env("NO_COLOR", "1")
+        .env("GH_FORCE_TTY", "")
         .output()
         .map_err(|e| anyhow!("failed to run gh: {}", e))?;
 
@@ -126,8 +129,56 @@ fn run_gh(args: &[String]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+#[derive(Debug, Clone)]
+pub struct PrCommit {
+    pub sha: String,
+    pub message: String,
+    pub author: String,
+}
+
+pub fn build_commits_args(pr: &PrRef) -> Vec<String> {
+    vec![
+        "pr".into(), "view".into(),
+        pr.number.to_string(),
+        "--repo".into(), pr.repo_slug(),
+        "--json".into(), "commits".into(),
+    ]
+}
+
+pub fn fetch_commits(pr: &PrRef) -> Result<Vec<PrCommit>> {
+    let json_str = run_gh(&build_commits_args(pr))?;
+    let v: Value = serde_json::from_str(&json_str)?;
+
+    let commits = v["commits"].as_array()
+        .ok_or_else(|| anyhow!("no commits array in gh response"))?
+        .iter()
+        .map(|c| {
+            let sha = c["oid"].as_str().unwrap_or("").to_string();
+            let message = c["messageHeadline"].as_str().unwrap_or("").to_string();
+            let author = c["authors"].as_array()
+                .and_then(|a| a.first())
+                .and_then(|a| a["login"].as_str())
+                .unwrap_or("")
+                .to_string();
+            PrCommit { sha, message, author }
+        })
+        .collect();
+
+    Ok(commits)
+}
+
+pub fn fetch_commit_diff(pr: &PrRef, sha: &str) -> Result<String> {
+    let args = vec![
+        "api".into(),
+        format!("/repos/{}/{}/commits/{}", pr.owner, pr.repo, sha),
+        "-H".into(), "Accept: application/vnd.github.diff".into(),
+    ];
+    run_gh(&args)
+}
+
 pub fn fetch_diff(pr: &PrRef) -> Result<String> {
-    run_gh(&build_diff_args(pr))
+    let raw = run_gh(&build_diff_args(pr))?;
+    Ok(crate::input::strip_ansi(&raw))
 }
 
 pub fn fetch_metadata(pr: &PrRef) -> Result<PrMetadata> {
@@ -135,11 +186,13 @@ pub fn fetch_metadata(pr: &PrRef) -> Result<PrMetadata> {
     let v: Value = serde_json::from_str(&json_str)?;
 
     let author = v["author"]["login"].as_str().unwrap_or("").to_string();
+    let body = v["body"].as_str().unwrap_or("").to_string();
 
     Ok(PrMetadata {
         title: v["title"].as_str().unwrap_or("").to_string(),
         url: v["url"].as_str().unwrap_or("").to_string(),
         author,
+        body,
         head_branch: v["headRefName"].as_str().unwrap_or("").to_string(),
         base_branch: v["baseRefName"].as_str().unwrap_or("").to_string(),
         head_ref_oid: v["headRefOid"].as_str().unwrap_or("").to_string(),

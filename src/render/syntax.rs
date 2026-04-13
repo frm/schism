@@ -17,7 +17,7 @@ pub struct Highlighter {
 impl Highlighter {
     pub fn new() -> Self {
         Self {
-            syntax_set: SyntaxSet::load_defaults_newlines(),
+            syntax_set: two_face::syntax::extra_newlines(),
             theme_set: ThemeSet::load_defaults(),
         }
     }
@@ -25,9 +25,10 @@ impl Highlighter {
     pub fn highlight_line(&self, line: &str, extension: &str) -> Vec<StyledSpan> {
         let theme = &self.theme_set.themes["base16-ocean.dark"];
 
+        let ext = Self::resolve_extension(extension);
         let syntax = self
             .syntax_set
-            .find_syntax_by_extension(extension)
+            .find_syntax_by_extension(ext)
             .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
 
         let mut h = HighlightLines::new(syntax, theme);
@@ -48,6 +49,14 @@ impl Highlighter {
 
     pub fn extension_from_path(path: &str) -> &str {
         path.rsplit('.').next().unwrap_or("")
+    }
+
+    /// Map extensions not covered by two-face's extra set.
+    fn resolve_extension(ext: &str) -> &str {
+        match ext {
+            "heex" | "leex" => "ex",
+            _ => ext,
+        }
     }
 }
 

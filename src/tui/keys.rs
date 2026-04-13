@@ -8,6 +8,7 @@ mod diff;
 mod filetree;
 mod fileview;
 mod fuzzy;
+mod pr_description;
 mod search;
 
 pub enum Action {
@@ -20,6 +21,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     if app.show_help {
         app.show_help = false;
         return Action::Continue;
+    }
+    if app.show_pr_description {
+        return pr_description::handle(app, key);
     }
     if app.file_view.is_some() {
         return fileview::handle(app, key);

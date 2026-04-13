@@ -21,6 +21,11 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
             app.show_help = true;
             Action::Continue
         }
+        KeyCode::Char('D') if app.pr_context.is_some() => {
+            app.show_pr_description = true;
+            app.pr_description_scroll = 0;
+            Action::Continue
+        }
         KeyCode::Char('q') | KeyCode::Esc => {
             if app.search.is_some() {
                 app.search = None;
