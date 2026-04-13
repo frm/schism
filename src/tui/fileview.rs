@@ -3,6 +3,7 @@ pub mod fetch;
 
 pub use draw::draw;
 
+use crate::github::pr::PrReviewContext;
 use crate::types::DiffFile;
 use fetch::fetch_content;
 
@@ -16,20 +17,35 @@ pub struct FileView {
 }
 
 impl FileView {
-    pub fn open(file_index: usize, showing_new: bool, files: &[DiffFile]) -> Self {
-        let content = fetch_content(&files[file_index], showing_new);
+    pub fn open(
+        file_index: usize,
+        showing_new: bool,
+        files: &[DiffFile],
+        pr_context: Option<&PrReviewContext>,
+    ) -> Self {
+        let content = fetch_content(&files[file_index], showing_new, pr_context);
         Self { file_index, showing_new, scroll: 0, content }
     }
 
-    pub fn toggle_version(&mut self, files: &[DiffFile], viewport_height: usize) {
+    pub fn toggle_version(
+        &mut self,
+        files: &[DiffFile],
+        viewport_height: usize,
+        pr_context: Option<&PrReviewContext>,
+    ) {
         self.showing_new = !self.showing_new;
-        self.content = fetch_content(&files[self.file_index], self.showing_new);
+        self.content = fetch_content(&files[self.file_index], self.showing_new, pr_context);
         self.clamp_scroll(viewport_height);
     }
 
-    pub fn set_file(&mut self, file_index: usize, files: &[DiffFile]) {
+    pub fn set_file(
+        &mut self,
+        file_index: usize,
+        files: &[DiffFile],
+        pr_context: Option<&PrReviewContext>,
+    ) {
         self.file_index = file_index;
-        self.content = fetch_content(&files[file_index], self.showing_new);
+        self.content = fetch_content(&files[file_index], self.showing_new, pr_context);
         self.scroll = 0;
     }
 

@@ -82,6 +82,7 @@ pub struct PrMetadata {
 pub struct PrReviewContext {
     pub pr: PrRef,
     pub metadata: PrMetadata,
+    pub commits: Vec<PrCommit>,
 }
 
 // ── command builders (testable without gh) ───────────────────────────────
@@ -174,6 +175,47 @@ pub fn fetch_commit_diff(pr: &PrRef, sha: &str) -> Result<String> {
         "-H".into(), "Accept: application/vnd.github.diff".into(),
     ];
     run_gh(&args)
+}
+
+pub fn fetch_file_content(pr: &PrRef, path: &str, ref_oid: &str) -> Result<String> {
+    let args = vec![
+        "api".into(),
+        format!("/repos/{}/{}/contents/{}?ref={}", pr.owner, pr.repo, path, ref_oid),
+        "-H".into(), "Accept: application/vnd.github.raw+json".into(),
+    ];
+    let raw = run_gh(&args)?;
+    // GitHub may return JSON with "content" field or raw text depending on accept header
+    // Try to parse as JSON first, fall back to raw
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+        if let Some(content) = v["content"].as_str() {
+            // base64 decode
+            let cleaned: String = content.chars().filter(|c| !c.is_whitespace()).collect();
+            if let Ok(bytes) = base64_decode(&cleaned) {
+                return Ok(String::from_utf8_lossy(&bytes).into_owned());
+            }
+        }
+    }
+    Ok(raw)
+}
+
+fn base64_decode(input: &str) -> Result<Vec<u8>> {
+    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(input.len() * 3 / 4);
+    let mut buf: u32 = 0;
+    let mut bits: u32 = 0;
+    for &b in input.as_bytes() {
+        if b == b'=' { break; }
+        let val = table.iter().position(|&t| t == b)
+            .ok_or_else(|| anyhow!("invalid base64"))? as u32;
+        buf = (buf << 6) | val;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+    Ok(out)
 }
 
 pub fn fetch_diff(pr: &PrRef) -> Result<String> {

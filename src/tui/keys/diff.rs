@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::tui::app::{App, Focus};
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
+use crate::tui::commit_picker::CommitPicker;
 use crate::tui::fileview::FileView;
 use crate::tui::rows::Row;
 use crate::tui::search::SearchState;
@@ -24,6 +25,12 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('D') if app.pr_context.is_some() => {
             app.show_pr_description = true;
             app.pr_description_scroll = 0;
+            Action::Continue
+        }
+        KeyCode::Char('C') if app.pr_context.is_some() => {
+            if let Some(ctx) = &app.pr_context {
+                app.commit_picker = Some(CommitPicker::new(ctx.commits.clone()));
+            }
             Action::Continue
         }
         KeyCode::Char('q') | KeyCode::Esc => {
@@ -111,12 +118,14 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         }
         KeyCode::Char('f') => {
             let fi = app.current_file_index();
-            app.file_view = Some(FileView::open(fi, true, &app.files));
+            let pr = app.pr_context.as_ref();
+            app.file_view = Some(FileView::open(fi, true, &app.files, pr));
             Action::Continue
         }
         KeyCode::Char('F') => {
             let fi = app.current_file_index();
-            app.file_view = Some(FileView::open(fi, false, &app.files));
+            let pr = app.pr_context.as_ref();
+            app.file_view = Some(FileView::open(fi, false, &app.files, pr));
             Action::Continue
         }
         KeyCode::Char('d') if app.pending_key == Some('d') => {

@@ -1,4 +1,5 @@
 use crate::github::pr::PrReviewContext;
+use crate::tui::commit_picker::CommitPicker;
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
 use crate::tui::fileview::FileView;
@@ -38,6 +39,7 @@ pub struct App {
     pub pr_context: Option<PrReviewContext>,
     pub show_pr_description: bool,
     pub pr_description_scroll: usize,
+    pub commit_picker: Option<CommitPicker>,
 }
 
 impl App {
@@ -69,6 +71,7 @@ impl App {
             pr_context,
             show_pr_description: false,
             pr_description_scroll: 0,
+            commit_picker: None,
         }
     }
 

@@ -4,6 +4,7 @@ use crate::tui::app::{App, Focus};
 
 mod body;
 mod comment;
+mod commit_picker;
 mod diff;
 mod filetree;
 mod fileview;
@@ -24,6 +25,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     }
     if app.show_pr_description {
         return pr_description::handle(app, key);
+    }
+    if app.commit_picker.is_some() {
+        return commit_picker::handle(app, key);
     }
     if app.file_view.is_some() {
         return fileview::handle(app, key);

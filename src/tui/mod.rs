@@ -1,6 +1,7 @@
 pub mod app;
 pub mod body;
 pub mod comment;
+pub mod commit_picker;
 pub mod draw;
 pub mod editor;
 pub mod filetree;

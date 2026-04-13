@@ -28,7 +28,8 @@ fn main() -> Result<()> {
         let pr = github::pr::parse_pr_ref(pr_ref)?;
         let diff = github::pr::fetch_diff(&pr)?;
         let metadata = github::pr::fetch_metadata(&pr)?;
-        let ctx = PrReviewContext { pr, metadata };
+        let commits = github::pr::fetch_commits(&pr).unwrap_or_default();
+        let ctx = PrReviewContext { pr, metadata, commits };
         (diff, Some(ctx))
     } else if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         (input::read_piped_stdin()?, None)

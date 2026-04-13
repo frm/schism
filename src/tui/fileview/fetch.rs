@@ -1,9 +1,28 @@
 use std::collections::HashSet;
 use std::process::Command;
 
+use crate::github::pr::PrReviewContext;
 use crate::types::{DiffFile, LineKind};
 
-pub fn fetch_content(file: &DiffFile, new: bool) -> Option<Vec<String>> {
+pub fn fetch_content(
+    file: &DiffFile,
+    new: bool,
+    pr_context: Option<&PrReviewContext>,
+) -> Option<Vec<String>> {
+    // PR mode: fetch from GitHub
+    if let Some(ctx) = pr_context {
+        let ref_oid = if new {
+            &ctx.metadata.head_ref_oid
+        } else {
+            &ctx.metadata.base_ref_oid
+        };
+        match crate::github::pr::fetch_file_content(&ctx.pr, &file.path, ref_oid) {
+            Ok(text) => return Some(text.lines().map(|l| l.to_string()).collect()),
+            Err(_) => return None,
+        }
+    }
+
+    // Local mode: git cat-file or disk fallback
     let sha = if new { file.new_sha.as_deref() } else { file.old_sha.as_deref() };
 
     if let Some(sha) = sha {
@@ -15,7 +34,6 @@ pub fn fetch_content(file: &DiffFile, new: bool) -> Option<Vec<String>> {
         }
     }
 
-    // Fallback: read from disk for new version
     if new {
         if let Ok(text) = std::fs::read_to_string(&file.path) {
             return Some(text.lines().map(|l| l.to_string()).collect());

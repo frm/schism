@@ -67,6 +67,9 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     if let Some(ref fv) = app.file_view {
         crate::tui::fileview::draw(frame, fv, app, highlighter);
     }
+    if app.commit_picker.is_some() {
+        crate::tui::commit_picker::draw::draw(frame, app, full_area);
+    }
     if app.show_pr_description {
         crate::tui::pr_description::draw(frame, app, full_area);
     }

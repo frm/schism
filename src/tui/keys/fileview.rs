@@ -34,14 +34,17 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('J') => {
             let next = (app.file_view.as_ref().unwrap().file_index + 1)
                 .min(app.files.len().saturating_sub(1));
-            app.file_view.as_mut().unwrap().set_file(next, &app.files);
+            let pr = app.pr_context.as_ref();
+            app.file_view.as_mut().unwrap().set_file(next, &app.files, pr);
         }
         KeyCode::Char('K') => {
             let prev = app.file_view.as_ref().unwrap().file_index.saturating_sub(1);
-            app.file_view.as_mut().unwrap().set_file(prev, &app.files);
+            let pr = app.pr_context.as_ref();
+            app.file_view.as_mut().unwrap().set_file(prev, &app.files, pr);
         }
         KeyCode::Char('m') => {
-            app.file_view.as_mut().unwrap().toggle_version(&app.files, vh);
+            let pr = app.pr_context.as_ref();
+            app.file_view.as_mut().unwrap().toggle_version(&app.files, vh, pr);
         }
         KeyCode::Char('f') | KeyCode::Esc | KeyCode::Char('q') => {
             let fi = app.file_view.as_ref().unwrap().file_index;
