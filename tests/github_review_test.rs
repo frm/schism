@@ -1,4 +1,4 @@
-use schism::github::pr::{ReviewEvent, collect_review_comments, build_review_payload};
+use schism::github::{ReviewEvent, collect_review_comments, build_review_payload};
 use schism::types::*;
 
 #[test]

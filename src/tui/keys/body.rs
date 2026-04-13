@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::github::pr::ReviewEvent;
+use crate::github::ReviewEvent;
 use crate::tui::app::App;
 use crate::tui::editor::{apply_edit, editor_action, EditorAction};
 

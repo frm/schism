@@ -1,4 +1,4 @@
-use schism::github::pr::{parse_pr_ref, build_diff_args, build_view_args};
+use schism::github::parse_pr_ref;
 
 #[test]
 fn parses_owner_repo_number() {
@@ -42,16 +42,4 @@ fn rejects_github_url_without_pull() {
     assert!(parse_pr_ref("https://github.com/frm/schism/issues/42").is_err());
 }
 
-#[test]
-fn builds_gh_pr_diff_args() {
-    let pr = parse_pr_ref("frm/schism#123").unwrap();
-    let args = build_diff_args(&pr);
-    assert_eq!(args, vec!["pr", "diff", "123", "--repo", "frm/schism"]);
-}
 
-#[test]
-fn builds_gh_pr_view_args() {
-    let pr = parse_pr_ref("frm/schism#123").unwrap();
-    let args = build_view_args(&pr);
-    assert_eq!(args, vec!["pr", "view", "123", "--repo", "frm/schism", "--json", "headRefOid,baseRefOid,headRefName,baseRefName,title,url,author,body"]);
-}

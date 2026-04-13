@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::process::Command;
 
-use crate::github::pr::PrReviewContext;
+use crate::github::PrReviewContext;
 use crate::types::{DiffFile, LineKind};
 
 pub fn fetch_content(
@@ -16,7 +16,7 @@ pub fn fetch_content(
         } else {
             &ctx.metadata.base_ref_oid
         };
-        match crate::github::pr::fetch_file_content(&ctx.pr, &file.path, ref_oid) {
+        match crate::github::fetch_file_content(&ctx.pr, &file.path, ref_oid) {
             Ok(text) => return Some(text.lines().map(|l| l.to_string()).collect()),
             Err(_) => return None,
         }

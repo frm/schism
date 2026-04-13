@@ -17,39 +17,10 @@ use crate::tui::rows::Row;
 
 pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     let full_area = frame.area();
-    let area = if let Some(ref ctx) = app.pr_context {
+    let area = if app.pr_context.is_some() {
         let bar = Rect::new(full_area.x, full_area.y, full_area.width, 1);
-        let content = Rect::new(full_area.x, full_area.y + 1, full_area.width, full_area.height.saturating_sub(1));
-
-        let info = Style::default().fg(Color::Cyan);
-        let mut spans = vec![
-            Span::styled(format!(" PR #{}", ctx.pr.number), info),
-            Span::styled(" · ", info),
-            Span::styled(ctx.metadata.author.clone(), info),
-            Span::styled(" · ", info),
-            Span::styled(format!("{} ← {}", ctx.metadata.base_branch, ctx.metadata.head_branch), info),
-            Span::styled(" · ", info),
-            Span::styled(ctx.metadata.title.clone(), info),
-        ];
-
-        let used: usize = spans.iter().map(|s| s.content.len()).sum();
-
-        if let Some(event) = app.review_event {
-            let (label, bg) = match event {
-                crate::github::pr::ReviewEvent::Comment => (" comment ", Color::Rgb(40, 40, 60)),
-                crate::github::pr::ReviewEvent::Approve => (" approve ", Color::Rgb(0, 50, 0)),
-                crate::github::pr::ReviewEvent::RequestChanges => (" request changes ", Color::Rgb(60, 30, 0)),
-            };
-            let pad = (bar.width as usize).saturating_sub(used + label.len());
-            spans.push(Span::styled(" ".repeat(pad), Style::default()));
-            spans.push(Span::styled(
-                label.to_string(),
-                Style::default().fg(Color::White).bg(bg).add_modifier(Modifier::BOLD),
-            ));
-        }
-
-        frame.render_widget(Paragraph::new(Line::from(spans)), bar);
-        content
+        render_pr_status_bar(frame, app, bar);
+        Rect::new(full_area.x, full_area.y + 1, full_area.width, full_area.height.saturating_sub(1))
     } else {
         full_area
     };
@@ -187,4 +158,36 @@ fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: 
             bar_area,
         );
     }
+}
+
+fn render_pr_status_bar(frame: &mut Frame, app: &App, bar: Rect) {
+    let ctx = app.pr_context.as_ref().unwrap();
+    let info = Style::default().fg(Color::Cyan);
+    let mut spans = vec![
+        Span::styled(format!(" PR #{}", ctx.pr.number), info),
+        Span::styled(" \u{00b7} ", info),
+        Span::styled(ctx.metadata.author.clone(), info),
+        Span::styled(" \u{00b7} ", info),
+        Span::styled(format!("{} \u{2190} {}", ctx.metadata.base_branch, ctx.metadata.head_branch), info),
+        Span::styled(" \u{00b7} ", info),
+        Span::styled(ctx.metadata.title.clone(), info),
+    ];
+
+    let used: usize = spans.iter().map(|s| s.content.len()).sum();
+
+    if let Some(event) = app.review_event {
+        let (label, bg) = match event {
+            crate::github::ReviewEvent::Comment => (" comment ", Color::Rgb(40, 40, 60)),
+            crate::github::ReviewEvent::Approve => (" approve ", Color::Rgb(0, 50, 0)),
+            crate::github::ReviewEvent::RequestChanges => (" request changes ", Color::Rgb(60, 30, 0)),
+        };
+        let pad = (bar.width as usize).saturating_sub(used + label.len());
+        spans.push(Span::styled(" ".repeat(pad), Style::default()));
+        spans.push(Span::styled(
+            label.to_string(),
+            Style::default().fg(Color::White).bg(bg).add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    frame.render_widget(Paragraph::new(Line::from(spans)), bar);
 }

@@ -10,6 +10,7 @@ pub mod fileview;
 pub mod fuzzy;
 pub mod help;
 pub mod keys;
+pub mod markdown;
 pub mod nav;
 pub mod pr_description;
 pub mod rows;

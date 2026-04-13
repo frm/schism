@@ -1,6 +1,6 @@
 pub mod draw;
 
-use crate::github::pr::PrCommit;
+use crate::github::PrCommit;
 
 pub struct CommitPicker {
     pub commits: Vec<PrCommit>,

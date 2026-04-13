@@ -6,9 +6,9 @@ use ratatui::{
     Frame,
 };
 
-use crate::github::pr::{collect_review_comments, ReviewEvent};
+use crate::github::{collect_review_comments, ReviewEvent};
 use crate::tui::app::App;
-use crate::tui::pr_description::render_markdown;
+use crate::tui::markdown;
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let event = match app.review_event {
@@ -45,7 +45,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     // Review body
     let body = app.review_body.as_deref().unwrap_or("");
     if !body.is_empty() {
-        let body_lines = render_markdown(body, inner_width.saturating_sub(2));
+        let body_lines = markdown::render(body, inner_width.saturating_sub(2));
         for bl in body_lines {
             lines.push(bl);
         }
@@ -105,7 +105,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             ]));
 
             // comment text (markdown rendered)
-            let md_lines = render_markdown(&c.body, inner_width.saturating_sub(2));
+            let md_lines = markdown::render(&c.body, inner_width.saturating_sub(2));
             for md_line in md_lines {
                 lines.push(md_line);
             }

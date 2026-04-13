@@ -11,7 +11,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use crate::github::pr::PrReviewContext;
+use crate::github::PrReviewContext;
 use crate::render::syntax::Highlighter;
 use crate::tui::app::App;
 use crate::tui::draw;
@@ -91,7 +91,7 @@ fn run_loop(
                     if let (Some(ctx), Some(event)) = (&app.pr_context, app.review_event) {
                         let body = app.review_body.take().unwrap_or_default();
                         if app.debug {
-                            let payload = crate::github::pr::build_review_payload(&body, event, &app.files);
+                            let payload = crate::github::build_review_payload(&body, event, &app.files);
                             let endpoint = format!(
                                 "POST /repos/{}/{}/pulls/{}/reviews",
                                 ctx.pr.owner, ctx.pr.repo, ctx.pr.number,
@@ -103,7 +103,7 @@ fn run_loop(
                             ));
                             return Ok(None);
                         }
-                        crate::github::pr::submit_review(ctx, &body, event, &app.files)?;
+                        crate::github::submit_review(ctx, &body, event, &app.files)?;
                         return Ok(None);
                     }
                     // Normal mode: return files + body for stdout/json output

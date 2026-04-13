@@ -9,7 +9,7 @@ mod types;
 use anyhow::Result;
 use clap::Parser;
 
-use github::pr::PrReviewContext;
+use github::PrReviewContext;
 
 #[derive(Parser)]
 #[command(name = "schism", about = "Terminal diff reviewer")]
@@ -25,12 +25,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let (input, pr_context) = if let Some(pr_ref) = &cli.pr {
-        github::pr::check_gh_installed()?;
-        let pr = github::pr::parse_pr_ref(pr_ref)?;
+        github::check_installed()?;
+        let pr = github::parse_pr_ref(pr_ref)?;
         eprint!("Fetching pull request...");
-        let diff = github::pr::fetch_diff(&pr)?;
-        let metadata = github::pr::fetch_metadata(&pr)?;
-        let commits = github::pr::fetch_commits(&pr).unwrap_or_default();
+        let diff = github::fetch_diff(&pr)?;
+        let metadata = github::fetch_metadata(&pr)?;
+        let commits = github::fetch_commits(&pr).unwrap_or_default();
         eprintln!(" done");
         let ctx = PrReviewContext { pr, metadata, commits };
         (diff, Some(ctx))

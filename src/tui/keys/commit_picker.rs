@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::github::pr;
+use crate::github;
 use crate::tui::app::App;
 
 use super::Action;
@@ -24,7 +24,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
             app.commit_picker = None;
 
             if let (Some(sha), Some(pr)) = (selected, pr_ref) {
-                match pr::fetch_commit_diff(&pr, &sha) {
+                match github::fetch_commit_diff(&pr, &sha) {
                     Ok(diff) => {
                         let files = crate::parse::parse_diff(&diff);
                         app.files = files;

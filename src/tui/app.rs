@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::github::pr::{PrReviewContext, ReviewEvent};
+use crate::github::{PrReviewContext, ReviewEvent};
 use crate::tui::commit_picker::CommitPicker;
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;

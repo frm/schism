@@ -3,7 +3,7 @@ pub mod fetch;
 
 pub use draw::draw;
 
-use crate::github::pr::PrReviewContext;
+use crate::github::PrReviewContext;
 use crate::types::DiffFile;
 use fetch::fetch_content;
 
