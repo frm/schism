@@ -45,6 +45,7 @@ pub struct DiffFile {
     pub status: FileStatus,
     pub hunks: Vec<Hunk>,
     pub collapsed: bool,
+    pub binary: bool,
     pub comment: Option<Comment>,
     pub old_sha: Option<String>,
     pub new_sha: Option<String>,

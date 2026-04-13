@@ -19,7 +19,7 @@ or drop into a PR.
 It's one-shot and composable by design. No persistence, no database, no account.
 Just stdin → review → stdout.
 
-<video src="assets/demo.mp4" controls></video>
+<video src="https://github.com/frm/schism/raw/refs/heads/main/assets/demo.mp4" controls width="100%"></video>
 
 ## Install
 

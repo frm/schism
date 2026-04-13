@@ -443,9 +443,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         }
         KeyCode::Char('t') => {
             app.show_filetree = !app.show_filetree;
-            if !app.show_filetree {
-                app.focus = Focus::Viewport;
-            }
+            app.focus = if app.show_filetree { Focus::FileTree } else { Focus::Viewport };
             Action::Continue
         }
         KeyCode::Char('h') | KeyCode::Left if app.show_filetree => {
@@ -549,6 +547,7 @@ pub fn find_matches(files: &[crate::types::DiffFile], rows: &[Row], query: &str)
             Row::HunkHeader { file_index, hunk_index } => files[*file_index].hunks[*hunk_index].header.as_str(),
             Row::Line { file_index, hunk_index, line_index } =>
                 files[*file_index].hunks[*hunk_index].lines[*line_index].content.as_str(),
+            Row::Binary { .. } => "",
         };
         if text.to_lowercase().contains(&q) { Some(i) } else { None }
     }).collect()

@@ -37,6 +37,7 @@ pub enum Row {
     FileHeader { file_index: usize },
     HunkHeader { file_index: usize, hunk_index: usize },
     Line { file_index: usize, hunk_index: usize, line_index: usize },
+    Binary { file_index: usize },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -181,6 +182,7 @@ impl App {
                 self.files[fi].hunks[hi].collapsed = !self.files[fi].hunks[hi].collapsed;
                 Row::HunkHeader { file_index: fi, hunk_index: hi }
             }
+            Row::Binary { file_index } => Row::Binary { file_index: *file_index },
         };
         self.rebuild_rows();
         self.snap_cursor_to_header(target);
@@ -294,10 +296,12 @@ impl App {
     }
 
     pub fn current_file_index(&self) -> usize {
+        if self.rows.is_empty() { return 0; }
         match &self.rows[self.cursor] {
             Row::FileHeader { file_index } => *file_index,
             Row::HunkHeader { file_index, .. } => *file_index,
             Row::Line { file_index, .. } => *file_index,
+            Row::Binary { file_index } => *file_index,
         }
     }
 
@@ -446,6 +450,11 @@ fn build_rows(files: &[DiffFile]) -> Vec<Row> {
         rows.push(Row::FileHeader { file_index: fi });
 
         if file.collapsed { continue; }
+
+        if file.binary {
+            rows.push(Row::Binary { file_index: fi });
+            continue;
+        }
 
         for (hi, hunk) in file.hunks.iter().enumerate() {
             rows.push(Row::HunkHeader { file_index: fi, hunk_index: hi });

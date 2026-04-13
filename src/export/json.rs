@@ -90,6 +90,7 @@ mod tests {
                 collapsed: false,
             }],
             collapsed: false,
+            binary: false,
             comment: None,
             old_sha: None,
             new_sha: None,

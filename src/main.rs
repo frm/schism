@@ -29,9 +29,32 @@ struct Cli {
     tree: bool,
 }
 
+/// Strip ANSI escape sequences (e.g. colour codes git adds when color.pager is on).
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                // consume until a letter (the final byte of a CSI sequence)
+                while let Some(&d) = chars.peek() {
+                    chars.next();
+                    if d.is_ascii_alphabetic() { break; }
+                }
+            }
+            // skip other escape sequences too
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn read_piped_stdin() -> Result<String> {
-    let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input)?;
+    let mut raw = String::new();
+    std::io::stdin().read_to_string(&mut raw)?;
+    let input = strip_ansi(&raw);
 
     // Replace stdin fd with /dev/tty so crossterm can read keyboard events.
     //

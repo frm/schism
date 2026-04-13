@@ -7,7 +7,8 @@ pub fn parse_file(lines: &[&str], start: usize) -> (DiffFile, usize) {
     let (status, old_path, old_sha, new_sha, mut i) = parse_extended_headers(lines, start + 1, &new_path);
 
     if i < lines.len() && lines[i].starts_with("Binary files") {
-        let file = build_file(new_path, old_path, &old_path_str, status, Vec::new(), old_sha, new_sha);
+        let mut file = build_file(new_path, old_path, &old_path_str, status, Vec::new(), old_sha, new_sha);
+        file.binary = true;
         return (file, i + 1);
     }
 
@@ -110,6 +111,7 @@ fn build_file(
         status,
         hunks,
         collapsed: false,
+        binary: false,
         comment: None,
         old_sha,
         new_sha,

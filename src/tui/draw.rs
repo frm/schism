@@ -171,6 +171,10 @@ fn render_row<'a>(
             let query = if is_match || is_current_match { match_query } else { None };
             render_diff_line(app, highlighter, *file_index, *hunk_index, *line_index, bg, query, width)
         }
+        Row::Binary { .. } => Line::from(Span::styled(
+            "  Binary file not shown".to_string(),
+            Style::default().fg(Color::DarkGray).bg(bg),
+        )),
     }
 }
 
