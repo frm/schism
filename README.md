@@ -27,7 +27,7 @@ Just stdin → review → stdout. Or `--pr` → review → submit.
 You can fold hunks, files or everything in one go.
 
 <details>
-<summary>Demo</summary>
+<summary><strong>Demo</strong></summary>
 
 ![folds](assets/folds.gif)
 
@@ -40,7 +40,7 @@ you can use to navigate to files quickly. Use Ctrl-P to quickly access a fuzzy
 finder.
 
 <details>
-<summary>Demo</summary>
+<summary><strong>Demo</strong></summary>
 
 ![file tree and ctrl-p](assets/tree.gif)
 
@@ -53,7 +53,7 @@ and swap between the old and the new revision. `f` opens the new revision, `F`
 opens the old and `m` toggles between them.
 
 <details>
-<summary>Demo</summary>
+<summary><strong>Demo</strong></summary>
 
 ![file mode](assets/file.gif)
 
@@ -66,7 +66,7 @@ context of the file, line number and line contents of your comment. You can also
 output in json with the `--json` flag.
 
 <details>
-<summary>Demo</summary>
+<summary><strong>Demo</strong></summary>
 
 ![inline comments](assets/comments.gif)
 
@@ -76,7 +76,7 @@ Use this to pipe into an AI. This allows you to quickly review AI changes and
 plug them back into it with review comments and context.
 
 <details>
-<summary>Demo</summary>
+<summary><strong>Demo</strong></summary>
 
 ![ai feedback](assets/ai.gif)
 
@@ -95,7 +95,7 @@ You can also read the PR description, browse through comments and diff them
 individually.
 
 <details>
-<summary>Demo</summary>
+<summary><strong>Demo</strong></summary>
 
 ![pr review](assets/pr.gif)
 
