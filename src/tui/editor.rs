@@ -1,3 +1,7 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+use crate::tui::wrap::{prev_char_boundary, wrapped_offsets, cursor_in_wrapped, wrapped_to_cursor, wrap_lines};
+
 /// Generic text editor state — shared by inline comments and the body overlay.
 pub struct TextEditor {
     pub text: String,
@@ -6,10 +10,6 @@ pub struct TextEditor {
 }
 
 impl TextEditor {
-    pub fn new() -> Self {
-        Self { text: String::new(), cursor_pos: 0 }
-    }
-
     pub fn with_text(text: String) -> Self {
         let cursor_pos = text.len();
         Self { text, cursor_pos }
@@ -44,8 +44,7 @@ impl TextEditor {
         let before = &self.text[..self.cursor_pos];
         let trimmed = before.trim_end_matches(|c: char| c == ' ' || c == '\n');
         let new_end = trimmed.rfind(|c: char| c == ' ' || c == '\n')
-            .map(|i| i + 1)
-            .unwrap_or(0);
+            .map(|i| i + 1).unwrap_or(0);
         self.text.drain(new_end..self.cursor_pos);
         self.cursor_pos = new_end;
     }
@@ -120,105 +119,71 @@ impl TextEditor {
     }
 }
 
-// ── wrap helpers ──────────────────────────────────────────────────────────────
+// ── key mapping ───────────────────────────────────────────────────────────────
 
-pub fn prev_char_boundary(s: &str, pos: usize) -> usize {
-    let mut p = pos - 1;
-    while !s.is_char_boundary(p) { p -= 1; }
-    p
+pub enum Edit {
+    InsertChar(char),
+    Backspace,
+    DeleteForward,
+    DeleteWordBack,
+    DeleteToLineStart,
+    MoveLeft, MoveRight,
+    MoveWordLeft, MoveWordRight,
+    MoveUp, MoveDown,
+    MoveLineStart, MoveLineEnd,
 }
 
-/// Flat byte offset of the start of each wrapped visual line.
-pub fn wrapped_offsets(text: &str, width: usize) -> Vec<usize> {
-    let mut offsets = Vec::new();
-    let mut flat_pos = 0usize;
-    for log_line in text.split('\n') {
-        if log_line.is_empty() {
-            offsets.push(flat_pos);
-        } else {
-            let chars: Vec<char> = log_line.chars().collect();
-            let mut i = 0;
-            while i < chars.len() {
-                let byte_i: usize = chars[..i].iter().map(|c| c.len_utf8()).sum();
-                offsets.push(flat_pos + byte_i);
-                i += width;
-            }
-        }
-        flat_pos += log_line.len() + 1;
+pub enum EditorAction {
+    InsertNewline,
+    Save,
+    Cancel,
+    Edit(Edit),
+    None,
+}
+
+pub fn editor_action(key: KeyEvent) -> EditorAction {
+    let ctrl  = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt   = key.modifiers.contains(KeyModifiers::ALT);
+    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+
+    match key.code {
+        KeyCode::Enter if shift                 => EditorAction::InsertNewline,
+        KeyCode::Enter                          => EditorAction::Save,
+        KeyCode::Esc                            => EditorAction::Cancel,
+        KeyCode::Char('w') if ctrl              => EditorAction::Edit(Edit::DeleteWordBack),
+        KeyCode::Char('u') if ctrl              => EditorAction::Edit(Edit::DeleteToLineStart),
+        KeyCode::Backspace if ctrl || alt       => EditorAction::Edit(Edit::DeleteWordBack),
+        KeyCode::Backspace                      => EditorAction::Edit(Edit::Backspace),
+        KeyCode::Delete                         => EditorAction::Edit(Edit::DeleteForward),
+        KeyCode::Home                           => EditorAction::Edit(Edit::MoveLineStart),
+        KeyCode::End                            => EditorAction::Edit(Edit::MoveLineEnd),
+        KeyCode::Left  if alt                   => EditorAction::Edit(Edit::MoveWordLeft),
+        KeyCode::Right if alt                   => EditorAction::Edit(Edit::MoveWordRight),
+        KeyCode::Char('b') if alt               => EditorAction::Edit(Edit::MoveWordLeft),
+        KeyCode::Char('f') if alt               => EditorAction::Edit(Edit::MoveWordRight),
+        KeyCode::Left                           => EditorAction::Edit(Edit::MoveLeft),
+        KeyCode::Right                          => EditorAction::Edit(Edit::MoveRight),
+        KeyCode::Up                             => EditorAction::Edit(Edit::MoveUp),
+        KeyCode::Down                           => EditorAction::Edit(Edit::MoveDown),
+        KeyCode::Char(c) if !ctrl && !alt       => EditorAction::Edit(Edit::InsertChar(c)),
+        _                                       => EditorAction::None,
     }
-    offsets
 }
 
-/// `(row, col)` of `cursor` within wrapped lines.
-pub fn cursor_in_wrapped(offsets: &[usize], cursor: usize) -> (usize, usize) {
-    let mut row = 0;
-    for (i, &off) in offsets.iter().enumerate().rev() {
-        if cursor >= off { row = i; break; }
-    }
-    (row, cursor - offsets[row])
-}
-
-/// Byte offset for `(target_row, target_col)`, clamped to line length.
-pub fn wrapped_to_cursor(text: &str, offsets: &[usize], row: usize, col: usize, width: usize) -> usize {
-    let lines = wrap_lines(text, width);
-    let clamped_row = row.min(lines.len().saturating_sub(1));
-    let line_len = lines.get(clamped_row).map(|l: &&str| l.len()).unwrap_or(0);
-    offsets.get(clamped_row).copied().unwrap_or(text.len()) + col.min(line_len)
-}
-
-/// All wrapped visual lines as string slices.
-pub fn wrap_lines<'a>(text: &'a str, width: usize) -> Vec<&'a str> {
-    let mut out = Vec::new();
-    for log_line in text.split('\n') {
-        if log_line.is_empty() {
-            out.push("");
-        } else {
-            let mut start = 0;
-            let mut col = 0;
-            for (i, _c) in log_line.char_indices() {
-                if col == width {
-                    out.push(&log_line[start..i]);
-                    start = i;
-                    col = 0;
-                }
-                col += 1;
-            }
-            out.push(&log_line[start..]);
-        }
-    }
-    out
-}
-
-/// Render the cursor span for a given line at the given column.
-/// Returns `(cursor_span, after_str)`.
-pub fn render_cursor<'a>(
-    line: &'a str,
-    col: usize,
-    bg: ratatui::style::Color,
-) -> (ratatui::text::Span<'static>, &'a str) {
-    let after_start = col.min(line.len());
-    let char_at = line[after_start..].chars().next();
-    match char_at {
-        Some(c) => {
-            let cursor_ch = line[after_start..after_start + c.len_utf8()].to_string();
-            let rest = &line[after_start + c.len_utf8()..];
-            (
-                ratatui::text::Span::styled(
-                    cursor_ch,
-                    ratatui::style::Style::default().fg(bg).bg(ratatui::style::Color::White),
-                ),
-                rest,
-            )
-        }
-        None => (
-            ratatui::text::Span::styled(
-                "█".to_string(),
-                ratatui::style::Style::default()
-                    .fg(ratatui::style::Color::White)
-                    .bg(bg)
-                    .add_modifier(ratatui::style::Modifier::SLOW_BLINK),
-            ),
-            "",
-        ),
+pub fn apply_edit(ed: &mut TextEditor, edit: Edit, cw: usize) {
+    match edit {
+        Edit::InsertChar(c)      => ed.insert_char(c),
+        Edit::Backspace          => ed.backspace(),
+        Edit::DeleteForward      => ed.delete_forward(),
+        Edit::DeleteWordBack     => ed.delete_word_back(),
+        Edit::DeleteToLineStart  => ed.delete_to_line_start(),
+        Edit::MoveLeft           => ed.move_left(),
+        Edit::MoveRight          => ed.move_right(),
+        Edit::MoveWordLeft       => ed.move_word_left(),
+        Edit::MoveWordRight      => ed.move_word_right(),
+        Edit::MoveUp             => ed.move_up(cw),
+        Edit::MoveDown           => ed.move_down(cw),
+        Edit::MoveLineStart      => ed.move_to_line_start(cw),
+        Edit::MoveLineEnd        => ed.move_to_line_end(cw),
     }
 }

@@ -5,7 +5,6 @@ use syntect::parsing::SyntaxSet;
 pub struct StyledSpan {
     pub text: String,
     pub fg: (u8, u8, u8),
-    pub bg: Option<(u8, u8, u8)>,
     pub bold: bool,
     pub italic: bool,
 }
@@ -41,7 +40,6 @@ impl Highlighter {
             Err(_) => vec![StyledSpan {
                 text: line.to_string(),
                 fg: (255, 255, 255),
-                bg: None,
                 bold: false,
                 italic: false,
             }],
@@ -57,11 +55,6 @@ fn style_to_span(style: Style, text: &str) -> StyledSpan {
     StyledSpan {
         text: text.to_string(),
         fg: (style.foreground.r, style.foreground.g, style.foreground.b),
-        bg: if style.background.a > 0 {
-            Some((style.background.r, style.background.g, style.background.b))
-        } else {
-            None
-        },
         bold: style.font_style.contains(FontStyle::BOLD),
         italic: style.font_style.contains(FontStyle::ITALIC),
     }

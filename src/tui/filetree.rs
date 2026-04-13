@@ -19,7 +19,6 @@ const FG_COMMENT:  Color = Color::Rgb(180, 140, 60);
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let height = area.height as usize;
-    let width  = area.width  as usize;
 
     let current_path = app.files.get(app.current_file_index())
         .map(|f| f.path.as_str())

@@ -13,7 +13,6 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use crate::render::syntax::Highlighter;
 use crate::tui::app::App;
-use crate::tui::comment;
 use crate::tui::draw;
 use crate::tui::keys::{self, Action};
 use crate::types::DiffFile;

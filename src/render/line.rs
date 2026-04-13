@@ -12,14 +12,6 @@ impl LineRenderer {
         }
     }
 
-    pub fn line_bg(kind: &LineKind) -> Option<Color> {
-        match kind {
-            LineKind::Added => Some(Color::Rgb { r: 0, g: 40, b: 0 }),
-            LineKind::Removed => Some(Color::Rgb { r: 40, g: 0, b: 0 }),
-            LineKind::Context => None,
-        }
-    }
-
     pub fn line_prefix(kind: &LineKind) -> &'static str {
         match kind {
             LineKind::Added => "+",
