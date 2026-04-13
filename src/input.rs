@@ -23,7 +23,8 @@ pub fn strip_ansi(s: &str) -> String {
 
 /// Read all of stdin, strip ANSI codes, then reopen /dev/tty on fd 0 so
 /// crossterm can read keyboard events after the pipe is consumed.
-pub fn read_piped_stdin() -> Result<String> {
+/// Returns (stripped, raw) — stripped for diff parsing, raw for passthrough.
+pub fn read_piped_stdin() -> Result<(String, String)> {
     let mut raw = String::new();
     std::io::stdin().read_to_string(&mut raw)?;
     let input = strip_ansi(&raw);
@@ -44,5 +45,5 @@ pub fn read_piped_stdin() -> Result<String> {
         std::mem::forget(tty);
     }
 
-    Ok(input)
+    Ok((input, raw))
 }
