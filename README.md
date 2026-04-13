@@ -1,10 +1,25 @@
 # schism
 
-A terminal diff reviewer with inline commenting, folding, file tree, and structured export.
+shitty AI-generated logo, idk idc:
 
-## Why
+<img src="assets/logo.png" alt="schism" width="300" />
 
-Diff pagers make diffs pretty but don't let you _do_ anything with them. schism lets you review a diff, leave inline comments on lines or whole files, write a review body, and pipe everything to an AI — without leaving the terminal.
+A terminal tool for capturing structured code review notes and piping them into
+AI. For people who know the pieces fit.
+
+## What it does
+
+Most diff pagers help you read a diff. schism helps you do something with it.
+
+You pipe in a diff, navigate it in a TUI, leave inline comments on lines or
+whole files, write a review summary — then press Enter. Your notes come out as
+structured text or JSON on stdout, ready to pipe into Claude, feed to a script,
+or drop into a PR.
+
+It's one-shot and composable by design. No persistence, no database, no account.
+Just stdin → review → stdout.
+
+<video src="assets/demo.mp4" controls></video>
 
 ## Install
 
@@ -12,25 +27,10 @@ Diff pagers make diffs pretty but don't let you _do_ anything with them. schism 
 cargo install --git https://github.com/frm/schism
 ```
 
-## Usage
-
-```bash
-# Interactive review
-git diff | schism
-
-# Pretty-print, no TUI
-git diff | schism --no-pager
-
-# Output as JSON
-git diff | schism --json
-
-# Open with file tree visible
-git diff | schism --tree
-```
-
 ## Git config
 
-Use schism as your default pager so `git diff`, `git show`, and `git log -p` all open in it:
+Use schism as your default pager so `git diff`, `git show`, and `git log -p`
+open in it:
 
 ```gitconfig
 [core]
@@ -39,25 +39,38 @@ Use schism as your default pager so `git diff`, `git show`, and `git log -p` all
     diffFilter = schism --no-pager
 ```
 
-## Example usage with Claude
-
-schism outputs comments to stdout when you press `Enter`. Add this to your shell config to review a diff and have Claude polish your notes into a proper review:
+## Usage
 
 ```bash
+git diff | schism            # interactive review
+git diff | schism --no-pager # pretty-print, no TUI
+git diff | schism --json     # structured JSON output
+git diff | schism --tree     # open with file tree visible
+```
+
+## Usage with AI
+
+Build a custom script like:
+
+```bash
+# Review, then have Claude turn your rough notes into polished feedback
 greview() {
   local comments
   comments=$(git diff "$@" | schism) || return
   [[ -z "$comments" ]] && return
   echo "$comments" | claude "These are my rough notes from a code review. Clean them up into clear, concise review comments."
 }
-```
 
-Then:
-
-```bash
 greview          # review working changes
 greview HEAD~1   # review last commit
 greview main     # review diff against main
+```
+
+You annotate what matters — bad patterns, questions, nits — and let the AI clean
+up the prose. The JSON output (`--json`) works well for more structured prompts:
+
+```bash
+git diff | schism --json | claude "Here is a JSON object with my code review notes. Summarize the main concerns and draft a PR comment."
 ```
 
 ## Keybindings
@@ -120,8 +133,6 @@ greview main     # review diff against main
 
 ### Stdout (on `Enter`)
 
-Only outputs if you have comments:
-
 ```
 src/auth.rs:42
 + if claims.expired() {
@@ -152,12 +163,6 @@ Whole file needs a security review
   ]
 }
 ```
-
-## Built with
-
-- [ratatui](https://github.com/ratatui/ratatui) + [crossterm](https://github.com/crossterm-rs/crossterm) — TUI
-- [syntect](https://github.com/trishume/syntect) — syntax highlighting
-- [nucleo](https://github.com/helix-editor/nucleo) — fuzzy matching
 
 ## License
 
