@@ -1,6 +1,6 @@
 # schism
 
-<img src="assets/logo.png" alt="schism" width="300" />
+<center><img src="assets/logo.png" alt="schism" width="300" /></center>
 
 _For people who know the pieces fit._ A terminal tool for capturing structured
 code review notes — locally or on GitHub PRs — and piping them into AI.
@@ -20,7 +20,86 @@ a review body, and approve/request changes — without leaving the terminal.
 It's one-shot and composable by design. No persistence, no database, no account.
 Just stdin → review → stdout. Or `--pr` → review → submit.
 
-<video src="https://github.com/user-attachments/assets/41f5c3f0-a12a-4162-ac67-65d52ef73800" controls width="100%"></video>
+### Features
+
+#### Folds
+
+You can fold hunks, files or everything in one go.
+
+<details>
+<summary>Demo</summary>
+
+![folds](assets/folds.gif)
+
+</details>
+
+#### File tree and Ctrl-P
+
+Navigate from file to file with `J`/`K`. There's also a file tree of the changes
+you can use to navigate to files quickly. Use Ctrl-P to quickly access a fuzzy
+finder.
+
+<details>
+<summary>Demo</summary>
+
+![file tree and ctrl-p](assets/tree.gif)
+
+</details>
+
+#### File mode
+
+Diffing is hard without context. You can quickly review the full file contents
+and swap between the old and the new revision. `f` opens the new revision, `F`
+opens the old and `m` toggles between them.
+
+<details>
+<summary>Demo</summary>
+
+![file mode](assets/file.gif)
+
+</details>
+
+#### Inline comments and AI feedback
+
+Add comments inline or in a review body. It will get output in plaintext with
+context of the file, line number and line contents of your comment. You can also
+output in json with the `--json` flag.
+
+<details>
+<summary>Demo</summary>
+
+![inline comments](assets/comments.gif)
+
+</details>
+
+Use this to pipe into an AI. This allows you to quickly review AI changes and
+plug them back into it with review comments and context.
+
+<details>
+<summary>Demo</summary>
+
+![ai feedback](assets/ai.gif)
+
+</details>
+
+#### Review PRs
+
+You can review PRs from the command line. Just use the `--pr` flag, add inline
+comments or a review body. Toggle between accept/comment/request changes and
+confirm with the right context before submitting your review.
+
+PR review supports file mode, which allows you to view the full file contents,
+in both the old and new revisions without leaving the tool.
+
+You can also read the PR description, browse through comments and diff them
+individually.
+
+<details>
+<summary>Demo</summary>
+
+![pr review](assets/pr.gif)
+
+</details>
 
 ## Install
 
@@ -48,6 +127,7 @@ schism --pr owner/repo#123 --debug   # print payload instead of submitting
 ```
 
 In PR mode:
+
 - The diff is fetched from GitHub via `gh`
 - A status bar shows PR info and the current review action
 - `D` opens the PR description with markdown rendering
@@ -87,66 +167,66 @@ greview main     # review diff against main
 
 ### Navigation
 
-| Key | Action |
-|---|---|
-| `j`/`k`, `↑`/`↓` | Move cursor |
-| `J`/`K` | Jump to next/prev file |
-| `n`/`N` | Jump to next/prev hunk (or search match) |
-| `gg` / `G` | Top / bottom |
-| `Ctrl+D`/`U` | Half page down/up |
-| `Ctrl+F`/`B` | Full page down/up |
-| `Ctrl+P` | Fuzzy file finder |
-| `/` | Search in diff |
+| Key              | Action                                   |
+| ---------------- | ---------------------------------------- |
+| `j`/`k`, `↑`/`↓` | Move cursor                              |
+| `J`/`K`          | Jump to next/prev file                   |
+| `n`/`N`          | Jump to next/prev hunk (or search match) |
+| `gg` / `G`       | Top / bottom                             |
+| `Ctrl+D`/`U`     | Half page down/up                        |
+| `Ctrl+F`/`B`     | Full page down/up                        |
+| `Ctrl+P`         | Fuzzy file finder                        |
+| `/`              | Search in diff                           |
 
 ### Folding
 
-| Key | Action |
-|---|---|
-| `z` / `Space` | Toggle fold hunk |
-| `Z` | Toggle fold file |
-| `Tab` | Toggle fold all hunks in file |
-| `Shift+Tab` | Toggle fold all files |
+| Key           | Action                        |
+| ------------- | ----------------------------- |
+| `z` / `Space` | Toggle fold hunk              |
+| `Z`           | Toggle fold file              |
+| `Tab`         | Toggle fold all hunks in file |
+| `Shift+Tab`   | Toggle fold all files         |
 
 ### Commenting
 
-| Key | Action |
-|---|---|
-| `c` | Add/edit comment on current line or file header |
-| `dd` | Delete comment |
-| `b` | Edit review body |
+| Key  | Action                                          |
+| ---- | ----------------------------------------------- |
+| `c`  | Add/edit comment on current line or file header |
+| `dd` | Delete comment                                  |
+| `b`  | Edit review body                                |
 
 ### File viewer
 
-| Key | Action |
-|---|---|
-| `f` | Open full file (new version) / close |
-| `F` | Open full file (old version) |
-| `m` | Toggle old/new in file viewer |
-| `J`/`K` | Next/prev file in file viewer |
+| Key     | Action                               |
+| ------- | ------------------------------------ |
+| `f`     | Open full file (new version) / close |
+| `F`     | Open full file (old version)         |
+| `m`     | Toggle old/new in file viewer        |
+| `J`/`K` | Next/prev file in file viewer        |
 
 ### PR mode
 
-| Key | Action |
-|---|---|
-| `D` | Show PR description |
-| `C` | Browse commits |
+| Key             | Action                                     |
+| --------------- | ------------------------------------------ |
+| `D`             | Show PR description                        |
+| `C`             | Browse commits                             |
 | `Tab` (in body) | Cycle: comment / approve / request changes |
-| `Enter` | Submit review (with confirmation) |
+| `Enter`         | Submit review (with confirmation)          |
 
 ### Tools
 
-| Key | Action |
-|---|---|
-| `t` | Toggle file tree sidebar |
+| Key     | Action                             |
+| ------- | ---------------------------------- |
+| `t`     | Toggle file tree sidebar           |
 | `h`/`l` | Switch focus between tree and diff |
-| `?` | Help overlay |
+| `?`     | Help overlay                       |
 
 ### Exit
 
-| Key | Action |
-|---|---|
-| `Enter` | Exit — output comments to stdout (silent if none) |
-| `q`/`Esc` | Exit silently, no output |
+| Key       | Action                                            |
+| --------- | ------------------------------------------------- |
+| `Enter`   | Exit — output comments to stdout (silent if none) |
+| `q`/`Esc` | Exit silently, no output                          |
 
 ## Output formats
 
@@ -167,8 +247,18 @@ Whole file needs a security review
 {
   "body": "Overall looks good, a few nits",
   "comments": [
-    { "path": "src/auth.rs", "line": 42, "change": "+", "text": "Handle expired tokens" },
-    { "path": "src/auth.rs", "line": 0,  "change": null, "text": "Needs security review" }
+    {
+      "path": "src/auth.rs",
+      "line": 42,
+      "change": "+",
+      "text": "Handle expired tokens"
+    },
+    {
+      "path": "src/auth.rs",
+      "line": 0,
+      "change": null,
+      "text": "Needs security review"
+    }
   ]
 }
 ```
