@@ -45,6 +45,19 @@ pub enum Focus {
     FileTree,
 }
 
+pub struct SearchState {
+    pub query: String,
+    pub matches: Vec<usize>,   // row indices
+    pub current: usize,        // index into matches
+    pub active_input: bool,    // true while typing
+}
+
+impl SearchState {
+    pub fn new() -> Self {
+        Self { query: String::new(), matches: Vec::new(), current: 0, active_input: true }
+    }
+}
+
 pub struct App {
     pub files: Vec<DiffFile>,
     pub rows: Vec<Row>,
@@ -67,6 +80,7 @@ pub struct App {
     pub body_editor: Option<BodyEditor>,
     pub review_body: Option<String>,
     pub file_view: Option<FileView>,
+    pub search: Option<SearchState>,
 }
 
 impl App {
@@ -93,6 +107,7 @@ impl App {
             body_editor: None,
             review_body: None,
             file_view: None,
+            search: None,
         }
     }
 

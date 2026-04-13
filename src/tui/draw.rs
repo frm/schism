@@ -40,8 +40,10 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
 }
 
 fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: Rect) {
+    // Reserve the last row for the search bar when active
+    let search_bar_height = if app.search.is_some() { 1usize } else { 0 };
     let width = area.width as usize;
-    let visible_rows = area.height as usize;
+    let visible_rows = area.height as usize - search_bar_height;
     let end = (app.scroll_offset + visible_rows).min(app.rows.len());
 
     let comment_row_idx = app.comment_input.as_ref().and_then(|c| {
@@ -63,7 +65,19 @@ fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: 
             break;
         }
         let is_cursor = i == app.cursor;
-        let line = render_row(&app.rows[i], app, highlighter, is_cursor, width);
+        let is_match = app.search.as_ref()
+            .filter(|s| !s.active_input && !s.query.is_empty())
+            .map(|s| s.matches.contains(&i))
+            .unwrap_or(false);
+        let is_current_match = app.search.as_ref()
+            .filter(|s| !s.active_input)
+            .and_then(|s| s.matches.get(s.current))
+            .map(|&m| m == i)
+            .unwrap_or(false);
+        let query = app.search.as_ref()
+            .filter(|s| !s.active_input && !s.query.is_empty())
+            .map(|s| s.query.as_str());
+        let line = render_row(&app.rows[i], app, highlighter, is_cursor, is_match, is_current_match, query, width);
         lines.push(line);
 
         // Render active comment input or saved comment below this row
@@ -101,8 +115,37 @@ fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: 
         }
     }
 
+    let content_area = if search_bar_height > 0 {
+        Rect::new(area.x, area.y, area.width, area.height - 1)
+    } else {
+        area
+    };
     let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, area);
+    frame.render_widget(paragraph, content_area);
+
+    // Search bar
+    if let Some(ref s) = app.search {
+        let bar_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+        let text = if s.active_input {
+            format!("/{}", s.query)
+        } else if s.matches.is_empty() {
+            format!("/{} [no matches]", s.query)
+        } else {
+            format!("/{} [{}/{}]", s.query, s.current + 1, s.matches.len())
+        };
+        let style = Style::default().fg(Color::White).bg(Color::Reset);
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(format!(" {}", text), style))),
+            bar_area,
+        );
+    }
+}
+
+fn row_bg(is_cursor: bool, is_match: bool, is_current_match: bool) -> Color {
+    if is_cursor           { Color::Rgb(30, 30, 50) }
+    else if is_current_match { Color::Rgb(60, 50, 0) }   // bright gold for current
+    else if is_match       { Color::Rgb(35, 30, 0) }      // dim gold for other matches
+    else                   { Color::Reset }
 }
 
 fn render_row<'a>(
@@ -110,20 +153,25 @@ fn render_row<'a>(
     app: &App,
     highlighter: &Highlighter,
     is_cursor: bool,
+    is_match: bool,
+    is_current_match: bool,
+    match_query: Option<&'a str>,
     width: usize,
 ) -> Line<'a> {
+    let bg = row_bg(is_cursor, is_match, is_current_match);
     match row {
-        Row::FileHeader { file_index } => render_file_header(app, *file_index, is_cursor, width),
+        Row::FileHeader { file_index } => render_file_header(app, *file_index, bg, width),
         Row::HunkHeader { file_index, hunk_index } => {
-            render_hunk_header(app, *file_index, *hunk_index, is_cursor, width)
+            render_hunk_header(app, *file_index, *hunk_index, bg, width)
         }
         Row::Line { file_index, hunk_index, line_index } => {
-            render_diff_line(app, highlighter, *file_index, *hunk_index, *line_index, is_cursor, width)
+            let query = if is_match || is_current_match { match_query } else { None };
+            render_diff_line(app, highlighter, *file_index, *hunk_index, *line_index, bg, query, width)
         }
     }
 }
 
-fn render_file_header<'a>(app: &App, file_index: usize, is_cursor: bool, width: usize) -> Line<'a> {
+fn render_file_header<'a>(app: &App, file_index: usize, bg: Color, width: usize) -> Line<'a> {
     let file = &app.files[file_index];
     let status_word = LineRenderer::status_word(&file.status);
     let (added, removed) = LineRenderer::file_stats(file);
@@ -134,40 +182,38 @@ fn render_file_header<'a>(app: &App, file_index: usize, is_cursor: bool, width: 
         None => file.path.clone(),
     };
 
-    let cursor_bg = if is_cursor { Color::Rgb(30, 30, 50) } else { Color::Reset };
-
     let mut spans = Vec::new();
     spans.push(Span::styled(
         format!(" {} ", fold),
-        Style::default().fg(Color::DarkGray).bg(cursor_bg),
+        Style::default().fg(Color::DarkGray).bg(bg),
     ));
     spans.push(Span::styled(
         format!("{} ", path_display),
-        Style::default().fg(Color::White).bg(cursor_bg).add_modifier(Modifier::BOLD),
+        Style::default().fg(Color::White).bg(bg).add_modifier(Modifier::BOLD),
     ));
     spans.push(Span::styled(
         "· ".to_string(),
-        Style::default().fg(Color::DarkGray).bg(cursor_bg),
+        Style::default().fg(Color::DarkGray).bg(bg),
     ));
     spans.push(Span::styled(
         format!("{} ", status_word),
-        Style::default().fg(Color::DarkGray).bg(cursor_bg),
+        Style::default().fg(Color::DarkGray).bg(bg),
     ));
     spans.push(Span::styled(
         "· ".to_string(),
-        Style::default().fg(Color::DarkGray).bg(cursor_bg),
+        Style::default().fg(Color::DarkGray).bg(bg),
     ));
     spans.push(Span::styled(
         format!("+{}", added),
-        Style::default().fg(Color::Green).bg(cursor_bg),
+        Style::default().fg(Color::Green).bg(bg),
     ));
     spans.push(Span::styled(
         " ".to_string(),
-        Style::default().bg(cursor_bg),
+        Style::default().bg(bg),
     ));
     spans.push(Span::styled(
         format!("-{}", removed),
-        Style::default().fg(Color::Red).bg(cursor_bg),
+        Style::default().fg(Color::Red).bg(bg),
     ));
 
     // Fill remaining width with separator character
@@ -178,11 +224,11 @@ fn render_file_header<'a>(app: &App, file_index: usize, is_cursor: bool, width: 
     if remaining > 2 {
         spans.push(Span::styled(
             " ".to_string(),
-            Style::default().bg(cursor_bg),
+            Style::default().bg(bg),
         ));
         spans.push(Span::styled(
             "━".repeat(remaining - 1),
-            Style::default().fg(Color::DarkGray).bg(cursor_bg),
+            Style::default().fg(Color::DarkGray).bg(bg),
         ));
     }
 
@@ -193,27 +239,26 @@ fn render_hunk_header<'a>(
     app: &App,
     file_index: usize,
     hunk_index: usize,
-    is_cursor: bool,
+    bg: Color,
     width: usize,
 ) -> Line<'a> {
     let hunk = &app.files[file_index].hunks[hunk_index];
     let (line_num, func_context) = LineRenderer::parse_hunk_context(&hunk.header);
-    let cursor_bg = if is_cursor { Color::Rgb(30, 30, 50) } else { Color::Reset };
     let frame_char = if hunk.collapsed { " ▸ " } else { " ╭ " };
 
     let mut spans = Vec::new();
     spans.push(Span::styled(
         frame_char.to_string(),
-        Style::default().fg(Color::DarkGray).bg(cursor_bg),
+        Style::default().fg(Color::DarkGray).bg(bg),
     ));
     spans.push(Span::styled(
         format!("L{}", line_num),
-        Style::default().fg(Color::Cyan).bg(cursor_bg),
+        Style::default().fg(Color::Cyan).bg(bg),
     ));
     if let Some(ctx) = func_context {
         spans.push(Span::styled(
             format!(" {}", ctx),
-            Style::default().fg(Color::DarkGray).bg(cursor_bg),
+            Style::default().fg(Color::DarkGray).bg(bg),
         ));
     }
 
@@ -222,10 +267,23 @@ fn render_hunk_header<'a>(
     let remaining = width.saturating_sub(used);
     spans.push(Span::styled(
         " ".repeat(remaining),
-        Style::default().bg(cursor_bg),
+        Style::default().bg(bg),
     ));
 
     Line::from(spans)
+}
+
+/// Slightly darken a background colour for the inline match highlight.
+fn match_highlight_bg(bg: Color) -> Color {
+    match bg {
+        Color::Rgb(r, g, b) => Color::Rgb(
+            r.saturating_add(25),
+            g.saturating_add(20),
+            b.saturating_add(10),
+        ),
+        Color::Reset => Color::Rgb(50, 45, 20),
+        other => other,
+    }
 }
 
 fn render_diff_line<'a>(
@@ -234,7 +292,8 @@ fn render_diff_line<'a>(
     file_index: usize,
     hunk_index: usize,
     line_index: usize,
-    is_cursor: bool,
+    bg: Color,
+    match_query: Option<&str>,
     width: usize,
 ) -> Line<'a> {
     let file = &app.files[file_index];
@@ -246,13 +305,15 @@ fn render_diff_line<'a>(
     let new_no = LineRenderer::format_lineno(diff_line.new_lineno, lineno_width);
     let prefix = LineRenderer::line_prefix(&diff_line.kind);
 
-    let line_bg = match (diff_line.kind.clone(), is_cursor) {
-        (LineKind::Added, true) => Color::Rgb(0, 60, 0),
-        (LineKind::Added, false) => Color::Rgb(0, 35, 0),
-        (LineKind::Removed, true) => Color::Rgb(70, 0, 0),
-        (LineKind::Removed, false) => Color::Rgb(45, 0, 0),
-        (LineKind::Context, true) => Color::Rgb(30, 30, 50),
-        (LineKind::Context, false) => Color::Reset,
+    // Blend line kind colour with the row background (cursor/match/etc)
+    let line_bg = match (&diff_line.kind, bg) {
+        (LineKind::Added,   Color::Rgb(30, 30, 50)) => Color::Rgb(0, 60, 0),
+        (LineKind::Added,   Color::Reset)            => Color::Rgb(0, 35, 0),
+        (LineKind::Added,   other)                   => other,
+        (LineKind::Removed, Color::Rgb(30, 30, 50)) => Color::Rgb(70, 0, 0),
+        (LineKind::Removed, Color::Reset)            => Color::Rgb(45, 0, 0),
+        (LineKind::Removed, other)                   => other,
+        (LineKind::Context, other)                   => other,
     };
 
     let comment_marker = if diff_line.comment.is_some() { "●" } else { " " };
@@ -292,20 +353,60 @@ fn render_diff_line<'a>(
         Style::default().fg(prefix_color).bg(line_bg),
     ));
 
-    // Syntax-highlighted content
+    // Syntax-highlighted content, with optional inline match highlight
     let hl_spans = highlighter.highlight_line(&diff_line.content, ext);
+    let content = &diff_line.content;
+    // Find the byte range of the first case-insensitive match
+    let match_range: Option<(usize, usize)> = match_query.and_then(|q| {
+        let lc = content.to_lowercase();
+        let lq = q.to_lowercase();
+        lc.find(&lq).map(|start| (start, start + lq.len()))
+    });
+    let match_bg = match_range.map(|_| match_highlight_bg(line_bg));
+
     let mut content_len = 0;
+    let mut byte_pos = 0usize;
     for span in hl_spans {
         let fg = Color::Rgb(span.fg.0, span.fg.1, span.fg.2);
-        let mut style = Style::default().fg(fg).bg(line_bg);
-        if span.bold {
-            style = style.add_modifier(Modifier::BOLD);
-        }
-        if span.italic {
-            style = style.add_modifier(Modifier::ITALIC);
-        }
+        let span_start = byte_pos;
+        let span_end   = byte_pos + span.text.len();
+        byte_pos = span_end;
         content_len += span.text.len();
-        spans.push(Span::styled(span.text, style));
+
+        let base_style = |bg_c: Color| {
+            let mut s = Style::default().fg(fg).bg(bg_c);
+            if span.bold   { s = s.add_modifier(Modifier::BOLD); }
+            if span.italic { s = s.add_modifier(Modifier::ITALIC); }
+            s
+        };
+
+        match (match_range, match_bg) {
+            (Some((ms, me)), Some(mbg)) if span_end > ms && span_start < me => {
+                // This syntect span overlaps the match — split into up to 3 segments
+                let pre_end  = ms.clamp(span_start, span_end);
+                let post_start = me.clamp(span_start, span_end);
+
+                if pre_end > span_start {
+                    spans.push(Span::styled(
+                        span.text[span_start - span_start..pre_end - span_start].to_string(),
+                        base_style(line_bg),
+                    ));
+                }
+                if post_start > pre_end {
+                    spans.push(Span::styled(
+                        span.text[pre_end - span_start..post_start - span_start].to_string(),
+                        base_style(mbg),
+                    ));
+                }
+                if post_start < span_end {
+                    spans.push(Span::styled(
+                        span.text[post_start - span_start..].to_string(),
+                        base_style(line_bg),
+                    ));
+                }
+            }
+            _ => spans.push(Span::styled(span.text, base_style(line_bg))),
+        }
     }
 
     // Fill remaining width with background

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::app::{App, Focus, Row};
+use crate::tui::app::{App, Focus, Row, SearchState};
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
 use crate::tui::editor::TextEditor;
@@ -204,6 +204,40 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         return Action::Continue;
     }
 
+    // Search input mode
+    if matches!(&app.search, Some(s) if s.active_input) {
+        match key.code {
+            KeyCode::Esc => { app.search = None; }
+            KeyCode::Enter => {
+                if let Some(s) = &mut app.search {
+                    s.active_input = false;
+                    s.matches = find_matches(&app.files, &app.rows, &s.query);
+                    s.current = 0;
+                    // Jump to first match at or after cursor
+                    if !s.matches.is_empty() {
+                        let first = s.matches.iter().position(|&r| r >= app.cursor).unwrap_or(0);
+                        s.current = first;
+                        let dest = s.matches[first];
+                        app.cursor = dest;
+                        app.ensure_cursor_visible();
+                    }
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(s) = &mut app.search {
+                    s.query.pop();
+                }
+            }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(s) = &mut app.search {
+                    s.query.push(c);
+                }
+            }
+            _ => {}
+        }
+        return Action::Continue;
+    }
+
     // File tree navigation
     if app.focus == Focus::FileTree && app.show_filetree {
         match key.code {
@@ -268,7 +302,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     }
 
     match key.code {
-        KeyCode::Char('q') | KeyCode::Esc => Action::Quit,
+        KeyCode::Char('/') => {
+            app.search = Some(SearchState::new());
+            Action::Continue
+        }
+        KeyCode::Char('q') | KeyCode::Esc => {
+            // If search is active (non-input), clear it first
+            if app.search.is_some() {
+                app.search = None;
+                return Action::Continue;
+            }
+            Action::Quit
+        }
         KeyCode::Enter => Action::QuitWithOutput,
         KeyCode::Char('j') | KeyCode::Down => {
             app.move_cursor(1);
@@ -287,10 +332,28 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
             Action::Continue
         }
         KeyCode::Char('n') => {
+            if let Some(s) = &mut app.search {
+                if !s.matches.is_empty() {
+                    s.current = (s.current + 1) % s.matches.len();
+                    let dest = s.matches[s.current];
+                    app.cursor = dest;
+                    app.ensure_cursor_visible();
+                    return Action::Continue;
+                }
+            }
             app.jump_next_hunk();
             Action::Continue
         }
         KeyCode::Char('N') => {
+            if let Some(s) = &mut app.search {
+                if !s.matches.is_empty() {
+                    s.current = s.current.checked_sub(1).unwrap_or(s.matches.len() - 1);
+                    let dest = s.matches[s.current];
+                    app.cursor = dest;
+                    app.ensure_cursor_visible();
+                    return Action::Continue;
+                }
+            }
             app.jump_prev_hunk();
             Action::Continue
         }
@@ -465,6 +528,20 @@ fn editor_action(key: KeyEvent) -> EditorAction {
         KeyCode::Char(c) if !ctrl && !alt       => EditorAction::Edit(Edit::InsertChar(c)),
         _                                       => EditorAction::None,
     }
+}
+
+pub fn find_matches(files: &[crate::types::DiffFile], rows: &[Row], query: &str) -> Vec<usize> {
+    if query.is_empty() { return Vec::new(); }
+    let q = query.to_lowercase();
+    rows.iter().enumerate().filter_map(|(i, row)| {
+        let text = match row {
+            Row::FileHeader { file_index } => files[*file_index].path.as_str(),
+            Row::HunkHeader { file_index, hunk_index } => files[*file_index].hunks[*hunk_index].header.as_str(),
+            Row::Line { file_index, hunk_index, line_index } =>
+                files[*file_index].hunks[*hunk_index].lines[*line_index].content.as_str(),
+        };
+        if text.to_lowercase().contains(&q) { Some(i) } else { None }
+    }).collect()
 }
 
 fn apply_edit(ed: &mut TextEditor, edit: Edit, cw: usize) {
