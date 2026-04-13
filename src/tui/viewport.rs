@@ -11,6 +11,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
+use crate::github::pr::PrReviewContext;
 use crate::render::syntax::Highlighter;
 use crate::tui::app::App;
 use crate::tui::draw;
@@ -18,7 +19,11 @@ use crate::tui::keys::{self, Action};
 use crate::types::DiffFile;
 
 /// Returns `None` on silent quit (q/Esc), `Some((files, body))` on Enter.
-pub fn run(files: Vec<DiffFile>, show_tree: bool) -> Result<Option<(Vec<DiffFile>, Option<String>)>> {
+pub fn run(
+    files: Vec<DiffFile>,
+    show_tree: bool,
+    pr_context: Option<PrReviewContext>,
+) -> Result<Option<(Vec<DiffFile>, Option<String>)>> {
     let tty = File::options().read(true).write(true).open("/dev/tty")?;
     let backend = CrosstermBackend::new(tty);
 
@@ -33,7 +38,7 @@ pub fn run(files: Vec<DiffFile>, show_tree: bool) -> Result<Option<(Vec<DiffFile
         ),
     )?;
 
-    let mut app = App::new(files, show_tree);
+    let mut app = App::new(files, show_tree, pr_context);
     let highlighter = Highlighter::new();
 
     let result = run_loop(&mut terminal, &mut app, &highlighter);

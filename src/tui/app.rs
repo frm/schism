@@ -1,3 +1,4 @@
+use crate::github::pr::PrReviewContext;
 use crate::tui::body::BodyEditor;
 use crate::tui::comment::CommentInput;
 use crate::tui::fileview::FileView;
@@ -34,10 +35,11 @@ pub struct App {
     pub file_view: Option<FileView>,
     pub search: Option<SearchState>,
     pub show_help: bool,
+    pub pr_context: Option<PrReviewContext>,
 }
 
 impl App {
-    pub fn new(files: Vec<DiffFile>, show_filetree: bool) -> Self {
+    pub fn new(files: Vec<DiffFile>, show_filetree: bool, pr_context: Option<PrReviewContext>) -> Self {
         let rows = build_rows(&files);
         let tree_root = build_tree(&files);
         let tree_flat = flatten_tree(&tree_root);
@@ -62,6 +64,7 @@ impl App {
             file_view: None,
             search: None,
             show_help: false,
+            pr_context,
         }
     }
 

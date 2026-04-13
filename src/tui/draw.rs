@@ -16,7 +16,34 @@ use crate::tui::comment;
 use crate::tui::rows::Row;
 
 pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
-    let area = frame.area();
+    let full_area = frame.area();
+    let area = if let Some(ref ctx) = app.pr_context {
+        let bar = Rect::new(full_area.x, full_area.y, full_area.width, 1);
+        let content = Rect::new(full_area.x, full_area.y + 1, full_area.width, full_area.height.saturating_sub(1));
+        let text = format!(
+            " PR #{} · {} · {} ← {} · {}",
+            ctx.pr.number,
+            ctx.metadata.author,
+            ctx.metadata.base_branch,
+            ctx.metadata.head_branch,
+            ctx.metadata.title,
+        );
+        let truncated = if text.len() > bar.width as usize {
+            format!("{}…", &text[..bar.width as usize - 1])
+        } else {
+            text
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                truncated,
+                Style::default().fg(Color::Cyan),
+            ))),
+            bar,
+        );
+        content
+    } else {
+        full_area
+    };
 
     if app.show_filetree {
         let chunks = Layout::default()
@@ -31,16 +58,16 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     }
 
     if app.fuzzy_finder.is_some() {
-        crate::tui::fuzzy::draw(frame, app, area);
+        crate::tui::fuzzy::draw(frame, app, full_area);
     }
     if let Some(ref body) = app.body_editor {
-        crate::tui::body::draw(frame, body, area);
+        crate::tui::body::draw(frame, body, full_area);
     }
     if let Some(ref fv) = app.file_view {
         crate::tui::fileview::draw(frame, fv, app, highlighter);
     }
     if app.show_help {
-        crate::tui::help::draw(frame, area);
+        crate::tui::help::draw(frame, full_area);
     }
 }
 

@@ -53,5 +53,5 @@ fn builds_gh_pr_diff_args() {
 fn builds_gh_pr_view_args() {
     let pr = parse_pr_ref("frm/schism#123").unwrap();
     let args = build_view_args(&pr);
-    assert_eq!(args, vec!["pr", "view", "123", "--repo", "frm/schism", "--json", "headRefOid,baseRefOid,title,url"]);
+    assert_eq!(args, vec!["pr", "view", "123", "--repo", "frm/schism", "--json", "headRefOid,baseRefOid,headRefName,baseRefName,title,url,author"]);
 }

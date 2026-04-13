@@ -70,6 +70,9 @@ impl PrRef {
 pub struct PrMetadata {
     pub title: String,
     pub url: String,
+    pub author: String,
+    pub head_branch: String,
+    pub base_branch: String,
     pub head_ref_oid: String,
     pub base_ref_oid: String,
 }
@@ -95,7 +98,7 @@ pub fn build_view_args(pr: &PrRef) -> Vec<String> {
         "pr".into(), "view".into(),
         pr.number.to_string(),
         "--repo".into(), pr.repo_slug(),
-        "--json".into(), "headRefOid,baseRefOid,title,url".into(),
+        "--json".into(), "headRefOid,baseRefOid,headRefName,baseRefName,title,url,author".into(),
     ]
 }
 
@@ -131,9 +134,14 @@ pub fn fetch_metadata(pr: &PrRef) -> Result<PrMetadata> {
     let json_str = run_gh(&build_view_args(pr))?;
     let v: Value = serde_json::from_str(&json_str)?;
 
+    let author = v["author"]["login"].as_str().unwrap_or("").to_string();
+
     Ok(PrMetadata {
         title: v["title"].as_str().unwrap_or("").to_string(),
         url: v["url"].as_str().unwrap_or("").to_string(),
+        author,
+        head_branch: v["headRefName"].as_str().unwrap_or("").to_string(),
+        base_branch: v["baseRefName"].as_str().unwrap_or("").to_string(),
         head_ref_oid: v["headRefOid"].as_str().unwrap_or("").to_string(),
         base_ref_oid: v["baseRefOid"].as_str().unwrap_or("").to_string(),
     })

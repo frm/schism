@@ -9,6 +9,8 @@ mod types;
 use anyhow::Result;
 use clap::Parser;
 
+use github::pr::PrReviewContext;
+
 #[derive(Parser)]
 #[command(name = "schism", about = "Terminal diff reviewer")]
 struct Cli {
@@ -21,12 +23,15 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let input = if let Some(pr_ref) = &cli.pr {
+    let (input, pr_context) = if let Some(pr_ref) = &cli.pr {
         github::pr::check_gh_installed()?;
         let pr = github::pr::parse_pr_ref(pr_ref)?;
-        github::pr::fetch_diff(&pr)?
+        let diff = github::pr::fetch_diff(&pr)?;
+        let metadata = github::pr::fetch_metadata(&pr)?;
+        let ctx = PrReviewContext { pr, metadata };
+        (diff, Some(ctx))
     } else if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-        input::read_piped_stdin()?
+        (input::read_piped_stdin()?, None)
     } else {
         return Ok(());
     };
@@ -40,7 +45,7 @@ fn main() -> Result<()> {
     if cli.no_pager {
         let is_tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
         render::pipe::render_pipe(&files, is_tty)?;
-    } else if let Some((files, review_body)) = tui::viewport::run(files, cli.tree)? {
+    } else if let Some((files, review_body)) = tui::viewport::run(files, cli.tree, pr_context)? {
         if cli.json {
             let review = export::json::Review { body: review_body.as_deref(), files: &files };
             print!("{}", export::json::format_json(&review));
