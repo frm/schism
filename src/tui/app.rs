@@ -81,6 +81,7 @@ pub struct App {
     pub review_body: Option<String>,
     pub file_view: Option<FileView>,
     pub search: Option<SearchState>,
+    pub show_help: bool,
 }
 
 impl App {
@@ -108,6 +109,7 @@ impl App {
             review_body: None,
             file_view: None,
             search: None,
+            show_help: false,
         }
     }
 

@@ -13,6 +13,12 @@ pub enum Action {
 }
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
+    // Help overlay — any key closes it (? toggles)
+    if app.show_help {
+        app.show_help = false;
+        return Action::Continue;
+    }
+
     // File view overlay
     if app.file_view.is_some() {
         let vh = app.viewport_height;
@@ -304,6 +310,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     match key.code {
         KeyCode::Char('/') => {
             app.search = Some(SearchState::new());
+            Action::Continue
+        }
+        KeyCode::Char('?') => {
+            app.show_help = true;
             Action::Continue
         }
         KeyCode::Char('q') | KeyCode::Esc => {

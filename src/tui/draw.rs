@@ -37,6 +37,9 @@ pub fn draw(frame: &mut Frame, app: &App, highlighter: &Highlighter) {
     if let Some(ref fv) = app.file_view {
         crate::tui::fileview::draw(frame, fv, app, highlighter);
     }
+    if app.show_help {
+        crate::tui::help::draw(frame, area);
+    }
 }
 
 fn draw_viewport(frame: &mut Frame, app: &App, highlighter: &Highlighter, area: Rect) {
