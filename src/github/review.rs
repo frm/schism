@@ -57,6 +57,7 @@ pub fn collect_review_comments(files: &[crate::types::DiffFile]) -> Vec<ReviewCo
 pub fn build_review_payload(
     body: &str,
     event: ReviewEvent,
+    commit_id: &str,
     files: &[crate::types::DiffFile],
 ) -> serde_json::Value {
     let comments: Vec<_> = collect_review_comments(files).into_iter().map(|c| {
@@ -70,6 +71,7 @@ pub fn build_review_payload(
 
     serde_json::json!({
         "body": body,
+        "commit_id": commit_id,
         "event": event.as_api_value(),
         "comments": comments,
     })
@@ -81,7 +83,7 @@ pub fn submit_review(
     event: ReviewEvent,
     files: &[crate::types::DiffFile],
 ) -> Result<()> {
-    let payload = build_review_payload(body, event, files);
+    let payload = build_review_payload(body, event, &context.metadata.head_ref_oid, files);
     let endpoint = format!(
         "/repos/{}/{}/pulls/{}/reviews",
         context.pr.owner, context.pr.repo, context.pr.number,
@@ -103,7 +105,12 @@ pub fn submit_review(
 
     let output = child.wait_with_output()?;
     if !output.status.success() {
-        anyhow::bail!("review submit failed: {}", String::from_utf8_lossy(&output.stderr).trim());
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !stdout.is_empty() {
+            anyhow::bail!("review submit failed: {}\n{}", stderr, stdout);
+        }
+        anyhow::bail!("review submit failed: {}", stderr);
     }
 
     Ok(())

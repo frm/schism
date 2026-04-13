@@ -91,7 +91,7 @@ fn run_loop(
                     if let (Some(ctx), Some(event)) = (&app.pr_context, app.review_event) {
                         let body = app.review_body.take().unwrap_or_default();
                         if app.debug {
-                            let payload = crate::github::build_review_payload(&body, event, &app.files);
+                            let payload = crate::github::build_review_payload(&body, event, &ctx.metadata.head_ref_oid, &app.files);
                             let endpoint = format!(
                                 "POST /repos/{}/{}/pulls/{}/reviews",
                                 ctx.pr.owner, ctx.pr.repo, ctx.pr.number,

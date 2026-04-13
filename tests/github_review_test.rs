@@ -62,7 +62,7 @@ fn maps_removed_line_to_left_side() {
 #[test]
 fn builds_comment_review_payload() {
     let files = vec![make_file()];
-    let payload = build_review_payload("Looks good overall", ReviewEvent::Comment, &files);
+    let payload = build_review_payload("Looks good overall", ReviewEvent::Comment, "abc123", &files);
     assert_eq!(payload["body"], serde_json::json!("Looks good overall"));
     assert_eq!(payload["event"], serde_json::json!("COMMENT"));
     assert_eq!(payload["comments"].as_array().unwrap().len(), 2);
@@ -71,6 +71,6 @@ fn builds_comment_review_payload() {
 #[test]
 fn builds_approve_review_payload() {
     let files = vec![make_file()];
-    let payload = build_review_payload("", ReviewEvent::Approve, &files);
+    let payload = build_review_payload("", ReviewEvent::Approve, "abc123", &files);
     assert_eq!(payload["event"], serde_json::json!("APPROVE"));
 }
